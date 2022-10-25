@@ -29,7 +29,8 @@ def hex(color: str):
 
 PADDING = (50, 150, 50, 50)
 BITMAP_BLOCK_PX = (13, 20)
-BITMAP_BLOCK_MARGIN = (2, 2)
+BITMAP_BLOCK_MARGIN = (4, 4)
+VERT_PADDING_BETWEEN_BUDDIES = 15
 
 COLOR_BG = hex('#23272e')
 COLOR_FREE = hex('#a5e075')
@@ -38,12 +39,13 @@ COLOR_EMPTY = (.1, .1, .1)
 
 bitmap = json.load(sys.stdin)
 
-bitmap_blocks_width = next_power_of_2(math.floor(math.sqrt(bitmap['memSize'])))
+bitmap_blocks_width = next_power_of_2(math.floor(math.sqrt(bitmap['memSize'] * 10)))
 bitmap_blocks_height = math.ceil(bitmap['memSize'] / bitmap_blocks_width)
+layers = len(bitmap['bitmap'])
 
 # generate blank image
 image_width = PADDING[0] + bitmap_blocks_width * (BITMAP_BLOCK_PX[0] + BITMAP_BLOCK_MARGIN[0]) + PADDING[2]
-image_height = PADDING[1] + bitmap_blocks_height * (BITMAP_BLOCK_PX[1] + BITMAP_BLOCK_MARGIN[1]) + PADDING[3]
+image_height = PADDING[1] + bitmap_blocks_height * ( layers * (BITMAP_BLOCK_PX[1] + BITMAP_BLOCK_MARGIN[1]) + VERT_PADDING_BETWEEN_BUDDIES) + PADDING[3]
 
 image_data = numpy.zeros((image_width, image_height, 4), dtype=numpy.uint8)
 surface = cairo.ImageSurface.create_for_data(image_data, cairo.FORMAT_ARGB32, image_width, image_height)
@@ -54,20 +56,23 @@ cr.set_source_rgb(*COLOR_BG)
 cr.paint()
 
 # draw bitmap blocks
-for by in range(bitmap_blocks_height):
-    for bx in range(bitmap_blocks_width):
-        i = (by * bitmap_blocks_width) + bx
-        if i >= bitmap['memSize']:
-            c = COLOR_EMPTY
-        elif bitmap['bitmap'][i] == '0':
+for layer, layerBitmap in bitmap['bitmap'].items():
+    width_mul = 1 << int(layer)
+    width = width_mul * BITMAP_BLOCK_PX[0] + (width_mul - 1) * BITMAP_BLOCK_MARGIN[0]
+
+    for i in range(len(layerBitmap)):
+        bx = ((i * width_mul) % bitmap_blocks_width) // width_mul
+        by = (i * width_mul) // bitmap_blocks_width
+
+        if layerBitmap[i] == '0':
             c = COLOR_FREE
         else:
             c = COLOR_USED
         cr.set_source_rgb(*c)
-        cr.rectangle(PADDING[0] + bx * (BITMAP_BLOCK_PX[0] + BITMAP_BLOCK_MARGIN[0]),
-                     PADDING[1] + by * (BITMAP_BLOCK_PX[1] + BITMAP_BLOCK_MARGIN[1]),
-                     BITMAP_BLOCK_PX[0],
+        cr.rectangle(PADDING[0] + bx * (width + BITMAP_BLOCK_MARGIN[0]),
+                     PADDING[1] + by * (layers * (BITMAP_BLOCK_PX[1] + BITMAP_BLOCK_MARGIN[1]) + VERT_PADDING_BETWEEN_BUDDIES) + int(layer) * (BITMAP_BLOCK_PX[1] + BITMAP_BLOCK_MARGIN[1]),
+                     width,
                      BITMAP_BLOCK_PX[1])
         cr.fill()
 
-surface.write_to_png('bitmap.png')
+surface.write_to_png('buddy.png')

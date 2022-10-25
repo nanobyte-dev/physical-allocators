@@ -1,9 +1,9 @@
 #include "Allocator.hpp"
 
-class BitmapAllocator : public Allocator
+class BuddyAllocator : public Allocator
 {
 public:
-    BitmapAllocator();
+    BuddyAllocator();
     bool Initialize(uint64_t blockSize, Region regions[], size_t regionCount) override;
     ptr_t Allocate(uint32_t blocks = 1) override;
     void Free(ptr_t base, uint32_t blocks) override;
@@ -16,20 +16,34 @@ public:
 
 private:
     void MarkRegion(ptr_t basePtr, size_t sizeBytes, bool isUsed);
-    void MarkBlocks(uint64_t base, size_t size, bool isUsed);
+    void MarkBlocks(uint64_t block, size_t count, bool isUsed);
+    void BubbleUp(int layerStart, uint64_t block, size_t count);
     void CheckAndMergeBlocks();
     ptr_t Align(ptr_t addr);
 
-    inline bool Get(uint64_t block)
+    inline uint64_t BlocksOnLayer(int layer)
     {
-        uint64_t addr = block / BitmapUnit;
+        return m_MemSize / (1 << layer);
+    }
+
+    inline uint64_t IndexOfLayer(int layer)
+    {
+        if (layer == 0)
+            return 0;
+
+        return m_BitmapFirstLayerSize * ((1 << layer) - 1) / (1 << (layer - 1));
+    }
+
+    inline bool Get(int layer, uint64_t block)
+    {
+        uint64_t addr = IndexOfLayer(layer) + block / BitmapUnit;
         uint64_t offset = block % BitmapUnit;
         return (m_Bitmap[addr] & (1 << offset)) != 0;
     }
 
-    inline void Set(uint64_t block, bool value)
+    inline void Set(int layer, uint64_t block, bool value)
     {
-        uint64_t addr = block / BitmapUnit;
+        uint64_t addr = IndexOfLayer(layer) + block / BitmapUnit;
         uint64_t offset = block % BitmapUnit;
         if (value)
             m_Bitmap[addr] |= (1 << offset);
@@ -54,7 +68,9 @@ private:
     uint8_t* m_MemBase;
     uint64_t m_MemSize;
     uint8_t* m_Bitmap;
+    uint64_t m_BitmapFirstLayerSize;
     uint64_t m_BitmapSize;
     uint64_t m_Next; // for next_fit strategy
     static constexpr size_t BitmapUnit = sizeof(m_Bitmap[0]) * 8;
+
 };

@@ -272,11 +272,7 @@ void LinkedListAllocator::CheckAndMergeBlocks()
 }
 
 // for statistics
-size_t LinkedListAllocator::GetRegionCount()
-{
-}
-
-void LinkedListAllocator::GetRegion(size_t index, Region& regionOut)
+void LinkedListAllocator::GetRegions(std::vector<Region>& regions)
 {
 }
 

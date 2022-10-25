@@ -1,6 +1,7 @@
 BUILD_DIR?=build
 CXX?=g++
 CXXFLAGS?=-ggdb -Isrc -Wall
+#CXXFLAGS?=-O2 -Isrc -Wall
 
 SOURCES_C=$(wildcard *.cpp) $(wildcard */*.cpp) $(wildcard */*/*.cpp)
 OBJECTS_C=$(patsubst %.cpp, $(BUILD_DIR)/%.o, $(SOURCES_C))

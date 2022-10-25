@@ -3,7 +3,7 @@
 uint32_t RoundToPowerOf2(uint32_t x)
 {
     // already a power of 2
-    if ((x & (x - 1)) == 0)
+    if (IsPowerOf2(x))
         return x;
 
     x |= x >> 1;
@@ -17,7 +17,7 @@ uint32_t RoundToPowerOf2(uint32_t x)
 uint64_t RoundToPowerOf2(uint64_t x)
 {
     // already a power of 2
-    if ((x & (x - 1)) == 0)
+    if (IsPowerOf2(x))
         return x;
 
     x |= x >> 1;

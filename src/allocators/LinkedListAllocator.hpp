@@ -36,8 +36,7 @@ public:
     void Free(void* base, uint32_t blocks) override;
     
     // for statistics
-    size_t GetRegionCount() override;
-    void GetRegion(size_t index, Region& regionOut) override;
+    void GetRegions(std::vector<Region>& regions) override;
 
     // for debugging
     void Dump() override;

@@ -1,6 +1,7 @@
 #pragma once
-#include <stdint.h>
-#include <stddef.h>
+#include <cstdint>
+#include <cstddef>
+#include <vector>
 
 enum class RegionType
 {
@@ -25,9 +26,6 @@ public:
     virtual void Free(ptr_t base, uint32_t blocks) = 0;
     
     // for statistics
-    virtual size_t GetRegionCount() = 0;
-    virtual void GetRegion(size_t index, Region& regionOut) = 0;
-
-    // for debugging
+    virtual void GetRegions(std::vector<Region>& regions) = 0;
     virtual void Dump() = 0;
 };
