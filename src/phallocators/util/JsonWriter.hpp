@@ -39,7 +39,7 @@ void JsonWriter::Property(std::string name, T value)
     {
         if (reinterpret_cast<void*>(value) == nullptr)
             m_Out << "null";
-        else m_Out << reinterpret_cast<uint64_t>(value);
+        else m_Out << (uint64_t)(value);
     }
     else
     {

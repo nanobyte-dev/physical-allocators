@@ -1,4 +1,5 @@
 #include "Allocator.hpp"
+#include "../math/MathHelpers.hpp"
 
 class BuddyAllocator : public Allocator
 {
@@ -9,7 +10,8 @@ public:
     void Free(ptr_t base, uint32_t blocks) override;
     
     // for statistics
-    void GetRegions(std::vector<Region>& regions) override;
+    RegionType GetState(ptr_t address) override;
+    //void GetRegions(std::vector<Region>& regions) override;
 
     // for debugging
     void Dump() override;
@@ -17,21 +19,16 @@ public:
 private:
     void MarkRegion(ptr_t basePtr, size_t sizeBytes, bool isUsed);
     void MarkBlocks(uint64_t block, size_t count, bool isUsed);
-    void BubbleUp(int layerStart, uint64_t block, size_t count);
-    void CheckAndMergeBlocks();
     ptr_t Align(ptr_t addr);
 
     inline uint64_t BlocksOnLayer(int layer)
     {
-        return m_MemSize / (1 << layer);
+        return (1 << layer) * m_BlocksLayer0;
     }
 
     inline uint64_t IndexOfLayer(int layer)
     {
-        if (layer == 0)
-            return 0;
-
-        return m_BitmapFirstLayerSize * ((1 << layer) - 1) / (1 << (layer - 1));
+        return DivRoundUp(m_BlocksLayer0, BitmapUnit) * ((1 << layer) - 1);
     }
 
     inline bool Get(int layer, uint64_t block)
@@ -55,22 +52,25 @@ private:
     inline uint64_t ToBlock(TPtr ptr)
     {
         uint8_t* u8Ptr = reinterpret_cast<uint8_t*>(ptr);
-        return (u8Ptr - m_MemBase) / m_BlockSize;
+        return (u8Ptr - m_MemBase) / m_SmallBlockSize;
     }
 
     inline ptr_t ToPtr(uint64_t block)
     {
-        uint8_t* u8Ptr = m_MemBase + block * m_BlockSize;
+        uint8_t* u8Ptr = m_MemBase + block * m_SmallBlockSize;
         return reinterpret_cast<ptr_t>(u8Ptr);
     }
 
-    uint64_t m_BlockSize;
+    uint64_t m_SmallBlockSize;
+    uint64_t m_BigBlockSize;
     uint8_t* m_MemBase;
-    uint64_t m_MemSize;
     uint8_t* m_Bitmap;
-    uint64_t m_BitmapFirstLayerSize;
     uint64_t m_BitmapSize;
-    uint64_t m_Next; // for next_fit strategy
+    uint64_t m_BlocksLayer0;
     static constexpr size_t BitmapUnit = sizeof(m_Bitmap[0]) * 8;
+
+    uint64_t m_LastAllocatedBlock;
+    uint64_t m_LastAllocatedCount;
+    int m_LastAllocatedLayer;
 
 };

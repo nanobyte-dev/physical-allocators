@@ -85,6 +85,9 @@ bool BitmapAllocator::Initialize(uint64_t blockSize, Region regions[], size_t re
 
 ptr_t BitmapAllocator::Allocate(uint32_t blocks) 
 {
+    if (blocks == 0)
+        return nullptr;
+
 #if STRAGEGY == STRATEGY_FIRST_FIT
     size_t currentRegionSize = 0;
     uint64_t currentRegionStart = 0;
@@ -230,29 +233,41 @@ void BitmapAllocator::MarkBlocks(uint64_t base, size_t size, bool isUsed)
 }
 
 // for statistics
-void BitmapAllocator::GetRegions(std::vector<Region>& regions)
+RegionType BitmapAllocator::GetState(ptr_t address)
 {
-    uint64_t currentRegionStart = 0;
-    bool currentRegionType = Get(0);
+    if (address >= m_Bitmap && address < m_Bitmap + m_BitmapSize)
+        return RegionType::Allocator;
 
-    for (size_t i = 0; i <= m_MemSize; i++)
-    {
-        if (i == m_MemSize || currentRegionType != Get(i))
-        {
-            Region region;
-            region.Base = ToPtr(currentRegionStart);
-            region.Size = m_BlockSize * (i - currentRegionStart);
-            region.Type = currentRegionType ? RegionType::Reserved : RegionType::Free;
-            regions.push_back(region);
+    uint64_t base = ToBlock(address);
+    if (base >= m_MemSize)
+        return RegionType::Unmapped;
 
-            if (i < m_MemSize) 
-            {
-                currentRegionStart = i;
-                currentRegionType = Get(i);
-            }
-        }
-    }
+    return Get(base) ? RegionType::Reserved : RegionType::Free;
 }
+
+// void BitmapAllocator::GetRegions(std::vector<Region>& regions)
+// {
+//     uint64_t currentRegionStart = 0;
+//     bool currentRegionType = Get(0);
+
+//     for (size_t i = 0; i <= m_MemSize; i++)
+//     {
+//         if (i == m_MemSize || currentRegionType != Get(i))
+//         {
+//             Region region;
+//             region.Base = ToPtr(currentRegionStart);
+//             region.Size = m_BlockSize * (i - currentRegionStart);
+//             region.Type = currentRegionType ? RegionType::Reserved : RegionType::Free;
+//             regions.push_back(region);
+
+//             if (i < m_MemSize) 
+//             {
+//                 currentRegionStart = i;
+//                 currentRegionType = Get(i);
+//             }
+//         }
+//     }
+// }
 
 void BitmapAllocator::Dump()
 {

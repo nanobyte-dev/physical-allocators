@@ -6,7 +6,9 @@
 enum class RegionType
 {
     Free,
-    Reserved
+    Reserved,
+    Unmapped,
+    Allocator,
 };
 
 using ptr_t = void*;
@@ -26,6 +28,6 @@ public:
     virtual void Free(ptr_t base, uint32_t blocks) = 0;
     
     // for statistics
-    virtual void GetRegions(std::vector<Region>& regions) = 0;
+    virtual RegionType GetState(ptr_t address) = 0;
     virtual void Dump() = 0;
 };

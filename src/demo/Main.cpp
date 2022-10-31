@@ -2,10 +2,12 @@
 #include <cstdint>
 #include <random>
 
-#include <math/MathHelpers.hpp>
-#include <allocators/BitmapAllocator.hpp>
-#include <allocators/BuddyAllocator.hpp>
-#include <Debug.hpp>
+#include <phallocators/math/MathHelpers.hpp>
+#include <phallocators/allocators/BitmapAllocator.hpp>
+#include <phallocators/allocators/BuddyAllocator.hpp>
+#include <phallocators/allocators/LinkedListAllocator.hpp>
+#include <phallocators/Debug.hpp>
+#include <phallocators/Config.hpp>
 #include <Config.hpp>
 
 #define ArraySize(array) (sizeof(array) / sizeof(array[0]))
@@ -33,13 +35,13 @@ void InitializeAllocator()
     }
 
     // compute free space
-    std::vector<Region> allocatorRegions;
-    g_Allocator.GetRegions(allocatorRegions);
-    for (auto& region : allocatorRegions)
-    {
-        if (region.Type == RegionType::Free)
-            g_FreeSpace += region.Size;
-    }
+    // std::vector<Region> allocatorRegions;
+    // g_Allocator.GetRegions(allocatorRegions);
+    // for (auto& region : allocatorRegions)
+    // {
+    //     if (region.Type == RegionType::Free)
+    //         g_FreeSpace += region.Size;
+    // }
 }
 
 #define TEST_ITERATIONS 1000000

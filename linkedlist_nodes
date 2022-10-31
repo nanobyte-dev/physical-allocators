@@ -1,0 +1,45 @@
+digraph {
+	graph [rank=same rankdir=LR]
+	4248752 [label=<<table border="0" cellspacing="0" cellborder="1">
+      <tr>
+        <td port="prev" width="28" height="36" fixedsize="true"></td>
+        <td port="base" width="28" height="36" fixedsize="false">0</td>
+        <td port="size" width="28" height="36" fixedsize="false">1</td>
+        <td port="type" width="28" height="36" fixedsize="false">Used</td>
+        <td port="next" width="28" height="36" fixedsize="true"></td>
+      </tr>
+    </table>> shape=plaintext]
+	4248752:next -> 4248800 [arrowtail=dot dir=forward]
+	4248800 [label=<<table border="0" cellspacing="0" cellborder="1">
+      <tr>
+        <td port="prev" width="28" height="36" fixedsize="true"></td>
+        <td port="base" width="28" height="36" fixedsize="false">1</td>
+        <td port="size" width="28" height="36" fixedsize="false">127</td>
+        <td port="type" width="28" height="36" fixedsize="false">Free</td>
+        <td port="next" width="28" height="36" fixedsize="true"></td>
+      </tr>
+    </table>> shape=plaintext]
+	4248800:prev -> 4248752 [arrowtail=dot dir=forward]
+	4248800:next -> 4248848 [arrowtail=dot dir=forward]
+	4248848 [label=<<table border="0" cellspacing="0" cellborder="1">
+      <tr>
+        <td port="prev" width="28" height="36" fixedsize="true"></td>
+        <td port="base" width="28" height="36" fixedsize="false">128</td>
+        <td port="size" width="28" height="36" fixedsize="false">128</td>
+        <td port="type" width="28" height="36" fixedsize="false">Used</td>
+        <td port="next" width="28" height="36" fixedsize="true"></td>
+      </tr>
+    </table>> shape=plaintext]
+	4248848:prev -> 4248800 [arrowtail=dot dir=forward]
+	4248848:next -> 4248944 [arrowtail=dot dir=forward]
+	4248944 [label=<<table border="0" cellspacing="0" cellborder="1">
+      <tr>
+        <td port="prev" width="28" height="36" fixedsize="true"></td>
+        <td port="base" width="28" height="36" fixedsize="false">256</td>
+        <td port="size" width="28" height="36" fixedsize="false">7936</td>
+        <td port="type" width="28" height="36" fixedsize="false">Free</td>
+        <td port="next" width="28" height="36" fixedsize="true"></td>
+      </tr>
+    </table>> shape=plaintext]
+	4248944:prev -> 4248848 [arrowtail=dot dir=forward]
+}

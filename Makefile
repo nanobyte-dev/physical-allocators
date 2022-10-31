@@ -1,26 +1,33 @@
-BUILD_DIR?=build
-CXX?=g++
-CXXFLAGS?=-ggdb -Isrc -Wall
-#CXXFLAGS?=-O2 -Isrc -Wall
+export BUILD_DIR=$(abspath build)
+export CXX=g++
+#export CXXFLAGS=-ggdb -I. -I$(abspath src) -Wall
+export CXXFLAGS=-O2 -I. -I$(abspath src) -Wall
+export AR=ar
 
-SOURCES_C=$(wildcard *.cpp) $(wildcard */*.cpp) $(wildcard */*/*.cpp)
-OBJECTS_C=$(patsubst %.cpp, $(BUILD_DIR)/%.o, $(SOURCES_C))
+.PHONY: all fat clean always .FORCE
 
-.PHONY: all fat clean always
+all: phallocators demo tests
 
-all: allocators_test
+phallocators: $(BUILD_DIR)/phallocators/libphallocators.a
 
-allocators_test: $(BUILD_DIR)/allocators_test
+$(BUILD_DIR)/phallocators/libphallocators.a: .FORCE
+	@$(MAKE) -C src/phallocators
 
-$(BUILD_DIR)/allocators_test: $(OBJECTS_C)
-	@$(CXX) $(CXXFLAGS) -o $@ $(OBJECTS_C)
 
-$(BUILD_DIR)/%.o: %.cpp always
-	@mkdir -p $(@D)
-	@$(CXX) $(CXXFLAGS) -c -o $@ $<
+demo: $(BUILD_DIR)/demo/demo
 
-always:
-	@mkdir -p $(BUILD_DIR)
+$(BUILD_DIR)/demo/demo: phallocators .FORCE
+	@$(MAKE) -C src/demo
+
+
+tests: $(BUILD_DIR)/tests/tests
+
+$(BUILD_DIR)/tests/tests: phallocators .FORCE
+	@$(MAKE) -C src/tests
+
 
 clean:
+	@$(MAKE) -C src/phallocators clean
+	@$(MAKE) -C src/demo clean
+	@$(MAKE) -C src/tests clean
 	@rm -rf $(BUILD_DIR)/*

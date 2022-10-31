@@ -9,7 +9,8 @@ public:
     void Free(ptr_t base, uint32_t blocks) override;
     
     // for statistics
-    void GetRegions(std::vector<Region>& regions) override;
+    RegionType GetState(ptr_t address) override;
+    // void GetRegions(std::vector<Region>& regions) override;
 
     // for debugging
     void Dump() override;

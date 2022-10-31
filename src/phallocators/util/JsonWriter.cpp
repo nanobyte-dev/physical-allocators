@@ -10,6 +10,8 @@ JsonWriter::JsonWriter(std::ostream& out, bool pretty)
 
 void JsonWriter::BeginObject()
 {
+    HandleComma();
+    
     m_Out << "{";
 
     m_NeedComma = false;

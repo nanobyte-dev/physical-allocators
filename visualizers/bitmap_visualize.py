@@ -32,8 +32,11 @@ BITMAP_BLOCK_PX = (13, 20)
 BITMAP_BLOCK_MARGIN = (2, 2)
 
 COLOR_BG = hex('#23272e')
-COLOR_FREE = hex('#a5e075')
-COLOR_USED = hex('#f14c4c')
+COLORS = [
+    hex('#a5e075'),
+    hex('#f14c4c'),
+    hex('#61afef')
+]
 COLOR_EMPTY = (.1, .1, .1)
 
 bitmap = json.load(sys.stdin)
@@ -45,8 +48,7 @@ bitmap_blocks_height = math.ceil(bitmap['memSize'] / bitmap_blocks_width)
 image_width = PADDING[0] + bitmap_blocks_width * (BITMAP_BLOCK_PX[0] + BITMAP_BLOCK_MARGIN[0]) + PADDING[2]
 image_height = PADDING[1] + bitmap_blocks_height * (BITMAP_BLOCK_PX[1] + BITMAP_BLOCK_MARGIN[1]) + PADDING[3]
 
-image_data = numpy.zeros((image_width, image_height, 4), dtype=numpy.uint8)
-surface = cairo.ImageSurface.create_for_data(image_data, cairo.FORMAT_ARGB32, image_width, image_height)
+surface = cairo.SVGSurface("bitmap.svg", image_width, image_height)
 cr = cairo.Context(surface)
 
 # background
@@ -59,10 +61,7 @@ for by in range(bitmap_blocks_height):
         i = (by * bitmap_blocks_width) + bx
         if i >= bitmap['memSize']:
             c = COLOR_EMPTY
-        elif bitmap['bitmap'][i] == '0':
-            c = COLOR_FREE
-        else:
-            c = COLOR_USED
+        c = COLORS[int(bitmap['bitmap'][i])]
         cr.set_source_rgb(*c)
         cr.rectangle(PADDING[0] + bx * (BITMAP_BLOCK_PX[0] + BITMAP_BLOCK_MARGIN[0]),
                      PADDING[1] + by * (BITMAP_BLOCK_PX[1] + BITMAP_BLOCK_MARGIN[1]),
@@ -70,4 +69,5 @@ for by in range(bitmap_blocks_height):
                      BITMAP_BLOCK_PX[1])
         cr.fill()
 
-surface.write_to_png('bitmap.png')
+surface.finish()
+surface.flush()
