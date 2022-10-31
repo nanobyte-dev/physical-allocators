@@ -1,7 +1,5 @@
 import json
 import sys
-import matplotlib.pyplot
-import numpy
 import cairo
 import math
 

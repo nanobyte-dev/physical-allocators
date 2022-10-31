@@ -1,8 +1,5 @@
 import json
 import sys
-from turtle import bgcolor
-import matplotlib.pyplot
-import numpy
 import cairo
 import math
 
