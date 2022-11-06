@@ -7,6 +7,8 @@
 #include <iostream>
 #include <sstream>
 
+#define INVALID_BLOCK           ((uint64_t)-1)
+
 BitmapAllocator::BitmapAllocator()
 {
 }
@@ -88,117 +90,12 @@ ptr_t BitmapAllocator::Allocate(uint32_t blocks)
     if (blocks == 0)
         return nullptr;
 
-#if STRAGEGY == STRATEGY_FIRST_FIT
-    size_t currentRegionSize = 0;
-    uint64_t currentRegionStart = 0;
-    bool currentRegionReset = true;
+    uint64_t pickedRegion = FindFreeRegion(blocks);
+    if (pickedRegion == INVALID_BLOCK)
+        return nullptr;
 
-    for (uint64_t i = 0; i < m_MemSize; i++)
-    {
-        // used
-        if (Get(i))
-        {
-            currentRegionReset = true;
-        }
-        else
-        {
-            if (currentRegionReset)
-            {
-                currentRegionSize = 1;
-                currentRegionStart = i;
-                currentRegionReset = false;
-            }
-            else currentRegionSize++;
-
-            if (currentRegionSize >= blocks)
-            {
-                MarkBlocks(currentRegionStart, blocks, true);
-                return ToPtr(currentRegionStart);
-            }
-        }
-    }
-
-#elif STRAGEGY == STRATEGY_NEXT_FIT
-    
-    size_t currentRegionSize = 0;
-    uint64_t currentRegionStart = 0;
-    bool currentRegionReset = true;
-
-    for (uint64_t it = 0; it < m_MemSize; it++)
-    {
-        uint64_t i = (it + m_Next) % m_MemSize;
-        if (i == 0)
-            currentRegionReset = true;
-
-        // used
-        if (Get(i))
-        {
-            currentRegionReset = true;
-        }
-        else
-        {
-            if (currentRegionReset)
-            {
-                currentRegionSize = 1;
-                currentRegionStart = i;
-                currentRegionReset = false;
-            }
-            else currentRegionSize++;
-
-            if (currentRegionSize >= blocks)
-            {
-                MarkBlocks(currentRegionStart, blocks, true);
-                m_Next = currentRegionStart + blocks;
-                return ToPtr(currentRegionStart);
-            }
-        }
-    }
-
-#else
-
-    uint64_t currentRegionStart = 0;
-    bool currentRegionType = Get(0);
-
-    int64_t pickedRegionStart = -1;
-    bool pickedRegionSize = 0;
-
-    for (size_t i = 0; i <= m_MemSize; i++)
-    {
-        if (i == m_MemSize || currentRegionType != Get(i))
-        {
-            // we have a region, see if we can use it
-            size_t regionSize = m_BlockSize * (i - currentRegionStart);
-            if (currentRegionType == false && regionSize >= blocks)
-            {
-#if STRATEGY == STRATEGY_BEST_FIT
-                if (pickedRegionStart == -1 || pickedRegionSize > regionSize)
-#else
-                if (pickedRegionStart == -1 || pickedRegionSize < regionSize)
-#endif
-                {
-                    pickedRegionStart = currentRegionStart;
-                    pickedRegionSize = regionSize;
-                }
-            }
-
-            if (i < m_MemSize) 
-            {
-                currentRegionStart = i;
-                currentRegionType = Get(i);
-            }
-        }
-    }
-
-    if (pickedRegionStart >= 0)
-    {
-        MarkBlocks(pickedRegionStart, pickedRegionSize, 1);
-        return ToPtr(pickedRegionStart);
-    }
-
-#endif
-
-    // nothing found
-    return nullptr;
+    MarkBlocks(pickedRegion, blocks, true);
+    return ToPtr(pickedRegion);
 }
 
 void BitmapAllocator::Free(ptr_t base, uint32_t blocks)
@@ -245,30 +142,6 @@ RegionType BitmapAllocator::GetState(ptr_t address)
     return Get(base) ? RegionType::Reserved : RegionType::Free;
 }
 
-// void BitmapAllocator::GetRegions(std::vector<Region>& regions)
-// {
-//     uint64_t currentRegionStart = 0;
-//     bool currentRegionType = Get(0);
-
-//     for (size_t i = 0; i <= m_MemSize; i++)
-//     {
-//         if (i == m_MemSize || currentRegionType != Get(i))
-//         {
-//             Region region;
-//             region.Base = ToPtr(currentRegionStart);
-//             region.Size = m_BlockSize * (i - currentRegionStart);
-//             region.Type = currentRegionType ? RegionType::Reserved : RegionType::Free;
-//             regions.push_back(region);
-
-//             if (i < m_MemSize) 
-//             {
-//                 currentRegionStart = i;
-//                 currentRegionType = Get(i);
-//             }
-//         }
-//     }
-// }
-
 void BitmapAllocator::Dump()
 {
     JsonWriter writer(std::cout, true);
@@ -284,4 +157,145 @@ void BitmapAllocator::Dump()
 
     writer.Property("bitmap", bitmap.str());
     writer.EndObject();
+}
+
+uint64_t BitmapAllocatorFirstFit::FindFreeRegion(uint32_t blocks)
+{
+    size_t currentRegionSize = 0;
+    uint64_t currentRegionStart = 0;
+    bool currentRegionReset = true;
+
+    for (uint64_t i = 0; i < m_MemSize; i++)
+    {
+        // used
+        if (Get(i))
+        {
+            currentRegionReset = true;
+        }
+        else
+        {
+            if (currentRegionReset)
+            {
+                currentRegionSize = 1;
+                currentRegionStart = i;
+                currentRegionReset = false;
+            }
+            else currentRegionSize++;
+
+            if (currentRegionSize >= blocks)
+                return currentRegionStart;
+        }
+    }
+
+    return INVALID_BLOCK;
+}
+
+
+BitmapAllocatorNextFit::BitmapAllocatorNextFit()
+    : BitmapAllocator(),
+      m_Next(0)
+{
+}
+    
+uint64_t BitmapAllocatorNextFit::FindFreeRegion(uint32_t blocks)
+{
+    size_t currentRegionSize = 0;
+    uint64_t currentRegionStart = 0;
+    bool currentRegionReset = true;
+
+    // Next fit only makes sense if the block previous to m_Next is used
+    if (m_Next > 0 && !Get(m_Next - 1))
+        m_Next = 0;
+
+    for (uint64_t it = 0; it < m_MemSize; it++)
+    {
+        uint64_t i = (it + m_Next) % m_MemSize;
+        if (i == 0)
+            currentRegionReset = true;
+
+        // used
+        if (Get(i))
+        {
+            currentRegionReset = true;
+        }
+        else
+        {
+            if (currentRegionReset)
+            {
+                currentRegionSize = 1;
+                currentRegionStart = i;
+                currentRegionReset = false;
+            }
+            else currentRegionSize++;
+
+            if (currentRegionSize >= blocks) {
+                m_Next = (currentRegionStart + 1) % m_MemSize;
+                return currentRegionStart;
+            }
+        }
+    }
+
+    return INVALID_BLOCK;
+}
+
+uint64_t BitmapAllocatorBestFit::FindFreeRegion(uint32_t blocks)
+{
+    uint64_t currentRegionStart = 0;
+    bool currentRegionType = Get(0);
+
+    uint64_t pickedRegionStart = INVALID_BLOCK;
+    bool pickedRegionSize = 0;
+
+    for (uint64_t i = 0; i <= m_MemSize; i++)
+    {
+        if (i == m_MemSize || currentRegionType != Get(i))
+        {
+            // we have a region, see if we can use it
+            size_t regionSize = i - currentRegionStart;
+            if (currentRegionType == false && regionSize >= blocks)
+            {
+                if (pickedRegionStart == INVALID_BLOCK || pickedRegionSize > regionSize)
+                {
+                    pickedRegionStart = currentRegionStart;
+                    pickedRegionSize = regionSize;
+                }
+            }
+
+            currentRegionStart = i;
+            currentRegionType = Get(i);
+        }
+    }
+
+    return pickedRegionStart;
+}
+
+uint64_t BitmapAllocatorWorstFit::FindFreeRegion(uint32_t blocks)
+{
+    uint64_t currentRegionStart = 0;
+    bool currentRegionType = Get(0);
+
+    uint64_t pickedRegionStart = INVALID_BLOCK;
+    bool pickedRegionSize = 0;
+
+    for (uint64_t i = 0; i <= m_MemSize; i++)
+    {
+        if (i == m_MemSize || currentRegionType != Get(i))
+        {
+            // we have a region, see if we can use it
+            size_t regionSize = i - currentRegionStart;
+            if (currentRegionType == false && regionSize >= blocks)
+            {
+                if (pickedRegionStart == INVALID_BLOCK || pickedRegionSize < regionSize)
+                {
+                    pickedRegionStart = currentRegionStart;
+                    pickedRegionSize = regionSize;
+                }
+            }
+
+            currentRegionStart = i;
+            currentRegionType = Get(i);
+        }
+    }
+
+    return pickedRegionStart;
 }

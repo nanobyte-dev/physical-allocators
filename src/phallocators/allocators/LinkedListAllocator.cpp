@@ -28,7 +28,6 @@ LinkedListAllocator::LinkedListAllocator()
       m_MemBase(nullptr),
       m_First(nullptr),
       m_Last(nullptr),
-      m_LastAllocated(nullptr),
       m_TotalCapacity(STATIC_POOL_SIZE),
       m_UsedBlocks(0),
       m_CurrentPool(&m_FirstPool),
@@ -116,47 +115,7 @@ ptr_t LinkedListAllocator::AllocateInternal(uint32_t blocks, RegionType type)
     if (blocks == 0)
         return nullptr;
 
-    LinkedListBlock* found = nullptr;
-
-#if LINKED_LIST_ALLOCATOR_STRATEGY == FIRST_FIT
-    LinkedListBlock* current = m_First;
-    while (current != nullptr && (current->Type != RegionType::Free || current->Size < blocks))
-        current = current->Next;
-
-    found = current;
-
-#elif LINKED_LIST_ALLOCATOR_STRATEGY == NEXT_FIT
-    LinkedListBlock* current = m_LastAllocated;
-    while (current != m_LastAllocated && (current->Type != RegionType::Free || current->Size < blocks))
-    {
-        current = current->Next;
-        if (current == nullptr)
-            current = m_First;
-    }
-
-    found = current;
-
-#elif LINKED_LIST_ALLOCATOR_STRATEGY == BEST_FIT
-    LinkedListBlock* current = m_First;
-    while (current != nullptr)
-    {
-        if (current->Type == RegionType::Free 
-            && current->Size > blocks 
-            && (found == nullptr || current->Size < found->Size))
-            found = current;
-    }
-
-#else
-    LinkedListBlock* current = m_First;
-    while (current != nullptr)
-    {
-        if (current->Type == RegionType::Free 
-            && current->Size > blocks 
-            && (found == nullptr || current->Size > found->Size))
-            found = current;
-    }
-
-#endif
+    LinkedListBlock* found = FindFreeRegion(blocks);
 
     // out of memory?
     if (found == nullptr)
@@ -381,4 +340,86 @@ void LinkedListAllocator::Dump()
 
     writer.EndArray();
     writer.EndObject();
+}
+
+LinkedListBlock* LinkedListAllocatorFirstFit::FindFreeRegion(uint32_t blocks)
+{
+    LinkedListBlock* current = m_First;
+    while (current != nullptr && (current->Type != RegionType::Free || current->Size < blocks))
+        current = current->Next;
+
+    return current;
+}
+
+LinkedListAllocatorNextFit::LinkedListAllocatorNextFit()
+    : LinkedListAllocator(),
+      m_Next(nullptr)
+{
+}
+
+LinkedListBlock* LinkedListAllocatorNextFit::FindFreeRegion(uint32_t blocks)
+{
+    if (m_Next == nullptr)
+        m_Next = m_First;
+
+    LinkedListBlock* current = m_Next;
+    while (current->Type != RegionType::Free || current->Size < blocks)
+    {
+        current = current->Next;
+
+        if (current == nullptr)
+            current = m_First;
+
+        // we wrapped around and found nothing
+        if (current == m_Next)
+            return nullptr;
+    }
+
+    m_Next = current;
+    return current;
+}
+
+void LinkedListAllocatorNextFit::DeleteBlock(LinkedListBlock* block)
+{
+    LinkedListAllocator::DeleteBlock(block);
+
+    if (block == m_Next)
+        m_Next = nullptr;
+}
+
+
+LinkedListBlock* LinkedListAllocatorBestFit::FindFreeRegion(uint32_t blocks)
+{
+    LinkedListBlock* found = nullptr;
+    LinkedListBlock* current = m_First;
+
+    while (current != nullptr)
+    {
+        if (current->Type == RegionType::Free 
+            && current->Size > blocks 
+            && (found == nullptr || current->Size < found->Size))
+            found = current;
+
+        current = current->Next;
+    }
+
+    return found;
+}
+
+LinkedListBlock* LinkedListAllocatorWorstFit::FindFreeRegion(uint32_t blocks)
+{
+    LinkedListBlock* found = nullptr;
+    LinkedListBlock* current = m_First;
+    
+    while (current != nullptr)
+    {
+        if (current->Type == RegionType::Free 
+            && current->Size > blocks 
+            && (found == nullptr || current->Size > found->Size))
+            found = current;
+            
+        current = current->Next;
+    }
+
+    return found;
 }

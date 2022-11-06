@@ -123,49 +123,69 @@ ptr_t BuddyAllocator::Allocate(uint32_t blocks)
     }
     else
     {
-        for(int layerSplit = layer; layerSplit >= 0; layerSplit--)
+        int layerFound = layer;
+        uint64_t iFound = FindFreeBlock(layerFound);
+
+        // out of memory
+        if (iFound == (uint64_t)-1)
+            return nullptr;
+
+        // if we are on a lower level than "layer", we need to split all the blocks all the way to "layer"
+        // always split on the left side
+        int i = iFound;
+        for (int l = layerFound; l < layer; l++, i <<= 1)
+            Set(l, i, true);
+
+        // bubble down - mark blocks below as used
+        int iBubble = i << 1;
+        int countBubble = 2;
+        for (int l = layer + 1; l < LAYER_COUNT; l++, iBubble <<= 1, countBubble <<= 1)
         {
-            auto count = BlocksOnLayer(layerSplit);
-            for (size_t iSplit = 0; iSplit < count; iSplit += 2)
-            {
-                // a block is considered free if its buddy is used
-                // otherwise we have to "split" a block on a lower layer
-                if (Get(layerSplit, iSplit) != Get(layerSplit, iSplit + 1))
-                {
-                    // set i to point to the free block
-                    if (Get(layerSplit, iSplit))
-                        ++iSplit;
-
-                    // if we are on a lower level than "layer", we need to split from "splitLayer" to "layer"
-                    // always split on the left side
-                    int i = iSplit;
-                    for (int l = layerSplit; l < layer; l++, i <<= 1)
-                        Set(l, i, true);
-
-                    // bubble down - mark blocks below as used
-                    int iBubble = i << 1;
-                    int countBubble = 2;
-                    for (int l = layer + 1; l < LAYER_COUNT; l++, iBubble <<= 1, countBubble <<= 1)
-                    {
-                        for (int j = 0; j < countBubble; j++)
-                            Set(l, iBubble + j, true);
-                    }
-
-                    // i points to index of block we want to return
-                    Set(layer, i, true);
-                    m_LastAllocatedBlock = i;
-                    m_LastAllocatedCount = 1;
-                    m_LastAllocatedLayer = layer;
-
-                    uint64_t base = i * (1 << (LAYER_COUNT - 1 - layer));
-                    return ToPtr(base);
-                }
-            }
+            for (int j = 0; j < countBubble; j++)
+                Set(l, iBubble + j, true);
         }
+
+        // i points to index of block we want to return
+        Set(layer, i, true);
+        m_LastAllocatedBlock = i;
+        m_LastAllocatedCount = 1;
+        m_LastAllocatedLayer = layer;
+
+        uint64_t base = i * (1 << (LAYER_COUNT - 1 - layer));
+        return ToPtr(base);
     }
 
     // nothing found
     return nullptr;
+}
+
+uint64_t BuddyAllocator::FindFreeBlock(int& layer)
+{
+    for(; layer > 0; layer--)
+    {
+        auto count = BlocksOnLayer(layer);
+        for (uint64_t i = 0; i < count; i += 2)
+        {
+            // a block is considered free if its buddy is used (e.g. 01 or 10)
+            // otherwise we have to "split" a block on a lower layer
+            if (Get(layer, i) != Get(layer, i + 1))
+            {
+                // return the free block   
+                return (!Get(layer, i)) ? i : i + 1;
+            }
+        }
+    }
+
+    // haven't found any free block, just split a block from level 0
+    auto count = BlocksOnLayer(layer);
+    for (uint64_t i = 0; i < count; i++)
+    {
+        if (!Get(layer, i))
+            return i;
+    }
+
+    // out of memory
+    return (uint64_t)-1;
 }
 
 void BuddyAllocator::Free(ptr_t base, uint32_t blocks)

@@ -14,4 +14,12 @@
 #include <phallocators/allocators/BuddyAllocator.hpp>
 #include <phallocators/allocators/LinkedListAllocator.hpp>
 
-#define ALL_ALLOCATORS          BitmapAllocator, BuddyAllocator, LinkedListAllocator
+#define ALL_ALLOCATORS          BitmapAllocatorFirstFit,        \
+                                BitmapAllocatorNextFit,         \
+                                BitmapAllocatorBestFit,         \
+                                BitmapAllocatorWorstFit,        \
+                                BuddyAllocator,                 \
+                                LinkedListAllocatorFirstFit,    \
+                                LinkedListAllocatorNextFit,     \
+                                LinkedListAllocatorBestFit,     \
+                                LinkedListAllocatorWorstFit

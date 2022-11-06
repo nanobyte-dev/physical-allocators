@@ -17,6 +17,7 @@ public:
     void Dump() override;
 
 private:
+    uint64_t FindFreeBlock(int& layer);
     void MarkRegion(ptr_t basePtr, size_t sizeBytes, bool isUsed);
     void MarkBlocks(uint64_t block, size_t count, bool isUsed);
     ptr_t Align(ptr_t addr);

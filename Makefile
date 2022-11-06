@@ -1,12 +1,12 @@
 export BUILD_DIR=$(abspath build)
 export CXX=g++
 #export CXXFLAGS=-ggdb -I. -I$(abspath src) -Wall
-export CXXFLAGS=-O2 -I. -I$(abspath src) -Wall
+export CXXFLAGS=-ggdb -std=c++17 -O2 -I. -I$(abspath src) -Wall
 export AR=ar
 
-.PHONY: all fat clean always .FORCE
+.PHONY: all phallocators demo tests benchmark clean .FORCE
 
-all: phallocators demo tests
+all: phallocators demo tests benchmark
 
 phallocators: $(BUILD_DIR)/phallocators/libphallocators.a
 
@@ -25,9 +25,15 @@ tests: $(BUILD_DIR)/tests/tests
 $(BUILD_DIR)/tests/tests: phallocators .FORCE
 	@$(MAKE) -C src/tests
 
+benchmark: $(BUILD_DIR)/benchmark/benchmark
+
+$(BUILD_DIR)/benchmark/benchmark: phallocators .FORCE
+	@$(MAKE) -C src/benchmark
+
 
 clean:
 	@$(MAKE) -C src/phallocators clean
 	@$(MAKE) -C src/demo clean
 	@$(MAKE) -C src/tests clean
+	@$(MAKE) -C src/benchmark clean
 	@rm -rf $(BUILD_DIR)/*

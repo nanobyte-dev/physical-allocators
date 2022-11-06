@@ -10,12 +10,13 @@ public:
     
     // for statistics
     RegionType GetState(ptr_t address) override;
-    // void GetRegions(std::vector<Region>& regions) override;
 
     // for debugging
     void Dump() override;
 
-private:
+protected:
+    virtual uint64_t FindFreeRegion(uint32_t blocks) = 0;
+
     void MarkRegion(ptr_t basePtr, size_t sizeBytes, bool isUsed);
     void MarkBlocks(uint64_t base, size_t size, bool isUsed);
     void CheckAndMergeBlocks();
@@ -56,6 +57,39 @@ private:
     uint64_t m_MemSize;
     uint8_t* m_Bitmap;
     uint64_t m_BitmapSize;
-    uint64_t m_Next; // for next_fit strategy
     static constexpr size_t BitmapUnit = sizeof(m_Bitmap[0]) * 8;
+};
+
+
+class BitmapAllocatorFirstFit : public BitmapAllocator
+{
+protected:
+    uint64_t FindFreeRegion(uint32_t blocks) override;
+};
+
+
+class BitmapAllocatorNextFit : public BitmapAllocator
+{
+public:
+    BitmapAllocatorNextFit();
+
+protected:
+    uint64_t FindFreeRegion(uint32_t blocks) override;
+
+private:
+    uint64_t m_Next;
+};
+
+
+class BitmapAllocatorBestFit : public BitmapAllocator
+{
+protected:
+    uint64_t FindFreeRegion(uint32_t blocks) override;
+};
+
+
+class BitmapAllocatorWorstFit : public BitmapAllocator
+{
+protected:
+    uint64_t FindFreeRegion(uint32_t blocks) override;
 };

@@ -29,5 +29,7 @@ public:
     
     // for statistics
     virtual RegionType GetState(ptr_t address) = 0;
+    // virtual uint64_t GetFreeBlocks() = 0;
+    // virtual uint64_t GetTotalBlocks() = 0;
     virtual void Dump() = 0;
 };
