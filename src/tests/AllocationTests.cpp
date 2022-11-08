@@ -88,7 +88,10 @@ TEMPLATE_TEST_CASE("Allocation test with some initial regions", "[allocation]", 
     // ensure entire memory is free
     for (uint64_t i = 0; i < MEM_SIZE; i += BLOCK_SIZE)
         if ((i >= 0x1000 && i < 0x80000) || i >= 0x00100000)
+        {
+            INFO(i);
             REQUIRE(is_one_of(allocator.GetState(basePtr + i), RegionType::Free, RegionType::Allocator));
+        }
 
     delete[] basePtr;
 }

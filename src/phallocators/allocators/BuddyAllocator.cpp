@@ -10,48 +10,35 @@
 #define LAYER_COUNT 10
 
 BuddyAllocator::BuddyAllocator()
-    : m_LastAllocatedBlock(0),
+    : Allocator(),
+      m_LastAllocatedBlock(0),
       m_LastAllocatedLayer(-1)
 {
 }
 
-bool BuddyAllocator::Initialize(uint64_t blockSize, Region regions[], size_t regionCount)
+bool BuddyAllocator::InitializeImpl(RegionBlocks regions[], size_t regionCount)
 {
-    uint8_t* memBase = reinterpret_cast<uint8_t*>(-1);
-    uint8_t* memEnd = nullptr;
-    Region *biggestFreeRegion = nullptr;
+    m_SmallBlockSize = m_BlockSize;
+    m_BigBlockSize = m_BlockSize * (1 << (LAYER_COUNT - 1));
+    m_BlocksLayer0 = DivRoundUp(m_MemSizeBytes, m_BigBlockSize);
+    m_BitmapSize = IndexOfLayer(LAYER_COUNT);
 
-    // go through list of blocks to determine 3 things: where memory begins, where it ends and biggest free region
+    // Find free region to fit BitmapSize
+    RegionBlocks *freeRegion = nullptr;
     for (size_t i = 0; i < regionCount; i++)
     {
-        if (regions[i].Base < memBase)
-            memBase = reinterpret_cast<uint8_t*>(regions[i].Base);
-
-        if (reinterpret_cast<uint8_t*>(regions[i].Base) + regions[i].Size > memEnd)
-            memEnd = reinterpret_cast<uint8_t*>(regions[i].Base) + regions[i].Size;
-
-        if (regions[i].Type == RegionType::Free && (!biggestFreeRegion || regions[i].Size > biggestFreeRegion->Size))
-            biggestFreeRegion = &regions[i];
+        if (regions[i].Type == RegionType::Free && regions[i].Size >= m_BitmapSize)
+            freeRegion = &regions[i];
     }
 
     // no free space :(
-    if (biggestFreeRegion == nullptr)
-        return false;
-
-    m_MemBase = memBase;
-    uint64_t memSizeBytes = memEnd - memBase;
-    m_SmallBlockSize = blockSize;
-    m_BigBlockSize = blockSize * (1 << (LAYER_COUNT - 1));
-    m_BlocksLayer0 = DivRoundUp(memSizeBytes, m_BigBlockSize);
-    m_BitmapSize = IndexOfLayer(LAYER_COUNT);
-    m_Bitmap = reinterpret_cast<uint8_t*>(biggestFreeRegion->Base);
-
-    // make sure we have enough space
-    if (m_BitmapSize > biggestFreeRegion->Size)
+    if (freeRegion == nullptr)
     {
-        Debug::Error("BuddyAllocator", "Not enough free memory - needed %u, only have %u!", m_BitmapSize, biggestFreeRegion->Size);
+        Debug::Error("BuddyAllocator", "Not enough free memory - needed %u!", m_BitmapSize);
         return false;
     }
+
+    m_Bitmap = reinterpret_cast<uint8_t*>(ToPtr(freeRegion->Base));
 
     // initialize bitmap with everything marked as "used"
     memset(m_Bitmap, 0xFF, m_BitmapSize);
@@ -60,12 +47,12 @@ bool BuddyAllocator::Initialize(uint64_t blockSize, Region regions[], size_t reg
     for (size_t i = 0; i < regionCount; i++)
     {
         if (regions[i].Type == RegionType::Free)
-            MarkRegion(regions[i].Base, regions[i].Size, false);
+            MarkBlocks(regions[i].Base, regions[i].Size, false);
     }
     for (size_t i = 0; i < regionCount; i++)
     {
         if (regions[i].Type != RegionType::Free)
-            MarkRegion(regions[i].Base, regions[i].Size, true);
+            MarkBlocks(regions[i].Base, regions[i].Size, true);
     }
 
     // mark region used by bitmap as used
@@ -239,38 +226,12 @@ RegionType BuddyAllocator::GetState(ptr_t address)
     return Get(LAYER_COUNT - 1, base) ? RegionType::Reserved : RegionType::Free;
 }
 
-// void BuddyAllocator::GetRegions(std::vector<Region>& regions)
-// {
-//     uint64_t currentRegionStart = 0;
-//     bool currentRegionType = Get(LAYER_COUNT - 1, 0);
-
-//     for (size_t i = 0; i <= BlocksOnLayer(LAYER_COUNT - 1); i++)
-//     {
-//         if (i == BlocksOnLayer(LAYER_COUNT - 1) || currentRegionType != Get(LAYER_COUNT - 1, i))
-//         {
-//             Region region;
-//             region.Base = ToPtr(currentRegionStart);
-//             region.Size = m_SmallBlockSize * (i - currentRegionStart);
-//             region.Type = currentRegionType ? RegionType::Reserved : RegionType::Free;
-//             regions.push_back(region);
-
-//             if (i < BlocksOnLayer(LAYER_COUNT - 1)) 
-//             {
-//                 currentRegionStart = i;
-//                 currentRegionType = Get(LAYER_COUNT - 1, i);
-//             }
-//         }
-//     }
-// }
-
-void BuddyAllocator::Dump()
+void BuddyAllocator::DumpImpl(JsonWriter& writer)
 {
-    JsonWriter writer(std::cout, true);
-    writer.BeginObject();
-    writer.Property("blockSize", m_SmallBlockSize);
-    writer.Property("memBase", m_MemBase);
-    writer.Property("blocksLayer0", m_BlocksLayer0);
+    writer.Property("smallBlockSize", m_SmallBlockSize);
+    writer.Property("bigBlockSize", m_BigBlockSize);
     writer.Property("bitmapSize", m_BitmapSize);
+    writer.Property("blocksLayer0", m_BlocksLayer0);
 
     writer.BeginObject("bitmap");
 
@@ -296,6 +257,5 @@ void BuddyAllocator::Dump()
         writer.Property(std::to_string(layer), bitmap.str());
     }
 
-    writer.EndObject();
     writer.EndObject();
 }

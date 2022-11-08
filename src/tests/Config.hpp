@@ -13,6 +13,9 @@
 #include <phallocators/allocators/BitmapAllocator.hpp>
 #include <phallocators/allocators/BuddyAllocator.hpp>
 #include <phallocators/allocators/LinkedListAllocator.hpp>
+#include <phallocators/allocators/experiments/BSTAllocator.hpp>
+#include <phallocators/allocators/experiments/BBSTAllocator.hpp>
+#include <phallocators/allocators/experiments/DualBBSTAllocator.hpp>
 
 #define ALL_ALLOCATORS          BitmapAllocatorFirstFit,        \
                                 BitmapAllocatorNextFit,         \
@@ -22,4 +25,10 @@
                                 LinkedListAllocatorFirstFit,    \
                                 LinkedListAllocatorNextFit,     \
                                 LinkedListAllocatorBestFit,     \
-                                LinkedListAllocatorWorstFit
+                                LinkedListAllocatorWorstFit,    \
+                                BSTAllocator,                   \
+                                BBSTAllocator,                  \
+                                DualBBSTAllocator
+
+// #undef ALL_ALLOCATORS
+// #define ALL_ALLOCATORS BuddyAllocator

@@ -7,76 +7,47 @@
 #include <iostream>
 #include <sstream>
 
-#define INVALID_BLOCK           ((uint64_t)-1)
+#define INVALID_BLOCK                   ((uint64_t)-1)
 
 BitmapAllocator::BitmapAllocator()
+    : Allocator()
 {
 }
 
-bool BitmapAllocator::Initialize(uint64_t blockSize, Region regions[], size_t regionCount)
+bool BitmapAllocator::InitializeImpl(RegionBlocks regions[], size_t regionCount)
 {
-    m_BlockSize = blockSize;
+    m_BitmapSize = DivRoundUp(m_MemSize, BitmapUnit);
 
-    // determine where memory begins and ends
-    uint8_t* memBase = reinterpret_cast<uint8_t*>(-1);
-    uint8_t* memEnd = nullptr;
-    Region *biggestFreeRegion = nullptr;
-
-    // go through list of blocks to determine 3 things: where memory begins, where it ends and biggest free region
+    // Find free region to fit BitmapSize
+    RegionBlocks *freeRegion = nullptr;
     for (size_t i = 0; i < regionCount; i++)
     {
-        if (regions[i].Base < memBase)
-            memBase = reinterpret_cast<uint8_t*>(regions[i].Base);
-
-        if (reinterpret_cast<uint8_t*>(regions[i].Base) + regions[i].Size > memEnd)
-            memEnd = reinterpret_cast<uint8_t*>(regions[i].Base) + regions[i].Size;
-
-        if (regions[i].Type == RegionType::Free && (!biggestFreeRegion || regions[i].Size > biggestFreeRegion->Size))
-            biggestFreeRegion = &regions[i];
+        if (regions[i].Type == RegionType::Free && regions[i].Size >= m_BitmapSize)
+            freeRegion = &regions[i];
     }
 
-    // not enough space :(
-    if (biggestFreeRegion == nullptr)
-        return false;
-
-    m_MemBase = memBase;
-    uint64_t memSizeBytes = memEnd - memBase;
-
-    // determine minimum block size
-    uint64_t minBlockSize = memSizeBytes / (biggestFreeRegion->Size - 1);
-    if (blockSize < minBlockSize && minBlockSize < 1024 * 1024 * 128)
+    // no free space :(
+    if (freeRegion == nullptr)
     {
-        // keep blocks a reasonable size
-        if (minBlockSize < 1024 * 1024 * 32)
-        {
-            minBlockSize = RoundToPowerOf2(minBlockSize);
-            Debug::Warn("BitmapAllocator", "Warning: not enough free memory for bitmap with blockSize %d, changing block size to %d", blockSize, minBlockSize);
-            m_BlockSize = minBlockSize;
-        }
-        else
-        {
-            // not enough free memory
-            return false;
-        }
+        Debug::Error("BitmapAllocator", "Not enough free memory - needed %u!", m_BitmapSize);
+        return false;
     }
-    
-    m_MemSize = memSizeBytes / blockSize;
-    m_Bitmap = reinterpret_cast<uint8_t*>(biggestFreeRegion->Base);
-    m_BitmapSize = DivRoundUp(m_MemSize, BitmapUnit);
+
+    m_Bitmap = reinterpret_cast<uint8_t*>(ToPtr(freeRegion->Base));
 
     // initialize bitmap with everything marked as "used"
     memset(m_Bitmap, 0xFF, m_BitmapSize);
-
+    
     // process free regions first
     for (size_t i = 0; i < regionCount; i++)
     {
         if (regions[i].Type == RegionType::Free)
-            MarkRegion(regions[i].Base, regions[i].Size, false);
+            MarkBlocks(regions[i].Base, regions[i].Size, false);
     }
     for (size_t i = 0; i < regionCount; i++)
     {
         if (regions[i].Type != RegionType::Free)
-            MarkRegion(regions[i].Base, regions[i].Size, true);
+            MarkBlocks(regions[i].Base, regions[i].Size, true);
     }
 
     // mark region used by bitmap
@@ -142,13 +113,8 @@ RegionType BitmapAllocator::GetState(ptr_t address)
     return Get(base) ? RegionType::Reserved : RegionType::Free;
 }
 
-void BitmapAllocator::Dump()
+void BitmapAllocator::DumpImpl(JsonWriter& writer)
 {
-    JsonWriter writer(std::cout, true);
-    writer.BeginObject();
-    writer.Property("blockSize", m_BlockSize);
-    writer.Property("memBase", m_MemBase);
-    writer.Property("memSize", m_MemSize);
     writer.Property("bitmapSize", m_BitmapSize);
 
     std::stringstream bitmap;
@@ -156,7 +122,6 @@ void BitmapAllocator::Dump()
         bitmap << static_cast<int>(Get(i));
 
     writer.Property("bitmap", bitmap.str());
-    writer.EndObject();
 }
 
 uint64_t BitmapAllocatorFirstFit::FindFreeRegion(uint32_t blocks)

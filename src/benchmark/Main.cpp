@@ -3,7 +3,9 @@
 #include <phallocators/allocators/BitmapAllocator.hpp>
 #include <phallocators/allocators/BuddyAllocator.hpp>
 #include <phallocators/allocators/LinkedListAllocator.hpp>
-
+#include <phallocators/allocators/experiments/BSTAllocator.hpp>
+#include <phallocators/allocators/experiments/BBSTAllocator.hpp>
+#include <phallocators/allocators/experiments/DualBBSTAllocator.hpp>
 #include "SpeedBenchmarks.hpp"
 #include <algorithm>
 #include <iomanip>
@@ -81,6 +83,9 @@ void SpeedBenchmarks()
     DoSpeedBenchmarks<LinkedListAllocatorNextFit>();
     DoSpeedBenchmarks<LinkedListAllocatorBestFit>();
     DoSpeedBenchmarks<LinkedListAllocatorWorstFit>();
+    DoSpeedBenchmarks<BSTAllocator>();
+    DoSpeedBenchmarks<BBSTAllocator>();
+    DoSpeedBenchmarks<DualBBSTAllocator>();
 }
 
 int main()
