@@ -196,7 +196,7 @@ void BuddyAllocator::MarkRegion(ptr_t basePtr, size_t sizeBytes, bool isUsed)
 
 void BuddyAllocator::MarkBlocks(uint64_t block, size_t count, bool isUsed)
 {
-    // partial bytes at the beginning
+    // start by marking everything on the last layer
     for (uint64_t i = block; i < block + count; i++)
         Set(LAYER_COUNT - 1, i, isUsed);
 
