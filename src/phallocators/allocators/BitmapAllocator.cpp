@@ -16,7 +16,7 @@ BitmapAllocator::BitmapAllocator()
 
 bool BitmapAllocator::InitializeImpl(RegionBlocks regions[], size_t regionCount)
 {
-    m_BitmapSize = DivRoundUp(m_MemSize, BitmapUnit);
+    m_BitmapSize = DivRoundUp(m_MemSize, 8ul);
 
     // Find free region to fit BitmapSize
     RegionBlocks *freeRegion = nullptr;
@@ -33,7 +33,7 @@ bool BitmapAllocator::InitializeImpl(RegionBlocks regions[], size_t regionCount)
         return false;
     }
 
-    m_Bitmap = reinterpret_cast<uint8_t*>(ToPtr(freeRegion->Base));
+    m_Bitmap = reinterpret_cast<BitmapUnitType*>(ToPtr(freeRegion->Base));
 
     // initialize bitmap with everything marked as "used"
     memset(m_Bitmap, 0xFF, m_BitmapSize);
@@ -83,19 +83,19 @@ void BitmapAllocator::MarkRegion(ptr_t basePtr, size_t sizeBytes, bool isUsed)
 
 void BitmapAllocator::MarkBlocks(uint64_t base, size_t size, bool isUsed)
 {
-    // partial bytes at the beginning
-    for (; base % BitmapUnit && size > 0; ++base, --size)
+    // partial byte at the beginning
+    for (; base % 8 && size > 0; ++base, --size)
         Set(base, isUsed);
 
     // entire bytes in the middle
-    if (size > 0)
+    if (size >= 8)
     {
-        memset(m_Bitmap + (base / BitmapUnit), isUsed ? 0xFF : 0, size / BitmapUnit);
-        base += (size - size % BitmapUnit);
-        size = size % BitmapUnit;
+        memset(reinterpret_cast<uint8_t*>(m_Bitmap) + base / 8, isUsed ? 0xFF : 0, size / 8);
+        base += (size - size % 8);
+        size = size % 8;
     }
 
-    // partial bytes at the end
+    // partial byte at the end
     for (; size > 0; ++base, --size)
         Set(base, isUsed);
 }
@@ -103,7 +103,7 @@ void BitmapAllocator::MarkBlocks(uint64_t base, size_t size, bool isUsed)
 // for statistics
 RegionType BitmapAllocator::GetState(ptr_t address)
 {
-    if (address >= m_Bitmap && address < m_Bitmap + m_BitmapSize)
+    if (address >= m_Bitmap && address < reinterpret_cast<uint8_t*>(m_Bitmap) + m_BitmapSize)
         return RegionType::Allocator;
 
     uint64_t base = ToBlock(address);
@@ -126,29 +126,41 @@ void BitmapAllocator::DumpImpl(JsonWriter& writer)
 
 uint64_t BitmapAllocatorFirstFit::FindFreeRegion(uint32_t blocks)
 {
-    size_t currentRegionSize = 0;
     uint64_t currentRegionStart = 0;
+    size_t currentRegionSize = 0;
     bool currentRegionReset = true;
 
-    for (uint64_t i = 0; i < m_MemSize; i++)
+    for (uint64_t i = 0; i <= m_MemSize / BlocksPerUnit; i++)
     {
         // used
-        if (Get(i))
+        if (m_Bitmap[i] == static_cast<BitmapUnitType>(-1))
         {
             currentRegionReset = true;
         }
-        else
+        else 
         {
-            if (currentRegionReset)
+            BitmapUnitType val = m_Bitmap[i];
+            for (size_t off = 0; off < BlocksPerUnit && (i * BlocksPerUnit + off) < m_MemSize; off++, val>>=1)
             {
-                currentRegionSize = 1;
-                currentRegionStart = i;
-                currentRegionReset = false;
-            }
-            else currentRegionSize++;
+                // region is used
+                if (val & 1)
+                {
+                    currentRegionReset = true;
+                }
+                else
+                {
+                    if (currentRegionReset)
+                    {
+                        currentRegionSize = 1;
+                        currentRegionStart = i * BlocksPerUnit + off;
+                        currentRegionReset = false;
+                    }
+                    else currentRegionSize++;
 
-            if (currentRegionSize >= blocks)
-                return currentRegionStart;
+                    if (currentRegionSize >= blocks)
+                        return currentRegionStart;
+                }
+            }
         }
     }
 
@@ -211,24 +223,43 @@ uint64_t BitmapAllocatorBestFit::FindFreeRegion(uint32_t blocks)
     uint64_t pickedRegionStart = INVALID_BLOCK;
     bool pickedRegionSize = 0;
 
-    for (uint64_t i = 0; i <= m_MemSize; i++)
+    while (currentRegionStart < m_MemSize)
     {
-        if (i == m_MemSize || currentRegionType != Get(i))
+        // determine region size
+        size_t size = 0;
+        uint64_t i;
+
+        for (i = currentRegionStart; i < m_MemSize; i++)
         {
-            // we have a region, see if we can use it
-            size_t regionSize = i - currentRegionStart;
-            if (currentRegionType == false && regionSize >= blocks)
+            if (i % BlocksPerUnit == 0 && 
+                (m_Bitmap[i / BlocksPerUnit] == static_cast<BitmapUnitType>(0) || 
+                 m_Bitmap[i / BlocksPerUnit] == static_cast<BitmapUnitType>(-1)))
             {
-                if (pickedRegionStart == INVALID_BLOCK || pickedRegionSize > regionSize)
-                {
-                    pickedRegionStart = currentRegionStart;
-                    pickedRegionSize = regionSize;
-                }
+                auto value = m_Bitmap[i / BlocksPerUnit];
+                if ((value & 1) != currentRegionType)
+                    break;
+
+                i += BlocksPerUnit - 1;
             }
 
-            currentRegionStart = i;
-            currentRegionType = Get(i);
+            else if (Get(i) != currentRegionType)
+                break;
         }
+
+        size = i - currentRegionStart;
+
+        // check region type
+        if (currentRegionType == false && 
+            size >= blocks && 
+            (pickedRegionStart == INVALID_BLOCK || pickedRegionSize > size))
+        {
+            pickedRegionStart = currentRegionStart;
+            pickedRegionSize = size;
+        }
+
+        // start next region
+        currentRegionStart = i;
+        currentRegionType = Get(i);
     }
 
     return pickedRegionStart;
@@ -242,24 +273,43 @@ uint64_t BitmapAllocatorWorstFit::FindFreeRegion(uint32_t blocks)
     uint64_t pickedRegionStart = INVALID_BLOCK;
     bool pickedRegionSize = 0;
 
-    for (uint64_t i = 0; i <= m_MemSize; i++)
+    while (currentRegionStart < m_MemSize)
     {
-        if (i == m_MemSize || currentRegionType != Get(i))
+        // determine region size
+        size_t size = 0;
+        uint64_t i;
+
+        for (i = currentRegionStart; i < m_MemSize; i++)
         {
-            // we have a region, see if we can use it
-            size_t regionSize = i - currentRegionStart;
-            if (currentRegionType == false && regionSize >= blocks)
+            if (i % BlocksPerUnit == 0 && 
+                (m_Bitmap[i / BlocksPerUnit] == static_cast<BitmapUnitType>(0) || 
+                 m_Bitmap[i / BlocksPerUnit] == static_cast<BitmapUnitType>(-1)))
             {
-                if (pickedRegionStart == INVALID_BLOCK || pickedRegionSize < regionSize)
-                {
-                    pickedRegionStart = currentRegionStart;
-                    pickedRegionSize = regionSize;
-                }
+                auto value = m_Bitmap[i / BlocksPerUnit];
+                if ((value & 1) != currentRegionType)
+                    break;
+
+                i += BlocksPerUnit - 1;
             }
 
-            currentRegionStart = i;
-            currentRegionType = Get(i);
+            else if (Get(i) != currentRegionType)
+                break;
         }
+
+        size = i - currentRegionStart;
+
+        // check region type
+        if (currentRegionType == false && 
+            size >= blocks && 
+            (pickedRegionStart == INVALID_BLOCK || pickedRegionSize < size))
+        {
+            pickedRegionStart = currentRegionStart;
+            pickedRegionSize = size;
+        }
+
+        // start next region
+        currentRegionStart = i;
+        currentRegionType = Get(i);
     }
 
     return pickedRegionStart;

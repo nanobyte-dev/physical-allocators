@@ -8,6 +8,7 @@
             "type": "shell",
             "command": "make",
             "args": [
+                "-j", "8",
                 "all"
             ],
             "options": {
@@ -24,6 +25,7 @@
             "type": "shell",
             "command": "make",
             "args": [
+                "-j", "8",
                 "demo"
             ],
             "options": {
@@ -35,6 +37,7 @@
             "type": "shell",
             "command": "make",
             "args": [
+                "-j", "8",
                 "tests"
             ],
             "options": {
@@ -56,6 +59,19 @@
             "label": "Test",
             "type": "shell",
             "command": "${workspaceFolder}/build/tests/tests",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Bench",
+            "type": "shell",
+            "command": "${workspaceFolder}/build/benchmark/benchmark",
             "options": {
                 "cwd": "${workspaceFolder}"
             },

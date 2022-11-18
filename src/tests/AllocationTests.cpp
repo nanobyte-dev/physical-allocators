@@ -36,11 +36,15 @@ TEMPLATE_TEST_CASE("Simple allocation test", "[allocation]", ALL_ALLOCATORS)
         REQUIRE(allocator.GetState(ptr + (BLOCK_SIZE / 2)) == RegionType::Free);
         REQUIRE(allocator.GetState(ptr + BLOCK_SIZE - 1) == RegionType::Free);
         REQUIRE(allocator.GetState(ptr + (i * BLOCK_SIZE) - 1) == RegionType::Free);
+
+        // ensure entire memory is free
+        for (uint64_t j = 0; j < MEM_SIZE; j += BLOCK_SIZE)
+        {
+            INFO(j);
+            REQUIRE(is_one_of(allocator.GetState(basePtr + j), RegionType::Free, RegionType::Allocator));
+        }
     }
 
-    // ensure entire memory is free
-    for (uint64_t i = 0; i < MEM_SIZE; i += BLOCK_SIZE)
-        REQUIRE(is_one_of(allocator.GetState(basePtr + i), RegionType::Free, RegionType::Allocator));
 
     delete[] basePtr;
 }

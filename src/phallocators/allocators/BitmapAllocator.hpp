@@ -21,24 +21,26 @@ protected:
 
     inline bool Get(uint64_t block)
     {
-        uint64_t addr = block / BitmapUnit;
-        uint64_t offset = block % BitmapUnit;
-        return (m_Bitmap[addr] & (1 << offset)) != 0;
+        uint64_t addr = block / BlocksPerUnit;
+        uint64_t offset = block % BlocksPerUnit;
+        return (m_Bitmap[addr] & (static_cast<BitmapUnitType>(1) << offset)) != 0;
     }
 
     inline void Set(uint64_t block, bool value)
     {
-        uint64_t addr = block / BitmapUnit;
-        uint64_t offset = block % BitmapUnit;
+        uint64_t addr = block / BlocksPerUnit;
+        uint64_t offset = block % BlocksPerUnit;
         if (value)
-            m_Bitmap[addr] |= (1 << offset);
+            m_Bitmap[addr] |= (static_cast<BitmapUnitType>(1) << offset);
         else
-            m_Bitmap[addr] &= ~(1 << offset);
+            m_Bitmap[addr] &= ~(static_cast<BitmapUnitType>(1) << offset);
     }
 
-    uint8_t* m_Bitmap;
+    typedef uint32_t BitmapUnitType;
+    static constexpr size_t BlocksPerUnit = sizeof(BitmapUnitType) * 8;
+
+    BitmapUnitType* m_Bitmap;
     uint64_t m_BitmapSize;
-    static constexpr size_t BitmapUnit = sizeof(m_Bitmap[0]) * 8;
 };
 
 

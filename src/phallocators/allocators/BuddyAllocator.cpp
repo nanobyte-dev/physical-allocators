@@ -148,22 +148,34 @@ ptr_t BuddyAllocator::Allocate(uint32_t blocks)
 
 uint64_t BuddyAllocator::FindFreeBlock(int& layer)
 {
+    // search for free blocks on lower levels
     for(; layer > 0; layer--)
     {
+        auto index = IndexOfLayer(layer);
         auto count = BlocksOnLayer(layer);
-        for (uint64_t i = 0; i < count; i += 2)
+
+        for (uint64_t i = 0; i < count / BitmapUnit; i++)
         {
             // a block is considered free if its buddy is used (e.g. 01 or 10)
-            // otherwise we have to "split" a block on a lower layer
-            if (Get(layer, i) != Get(layer, i + 1))
+            auto value = m_Bitmap[index + i];
+            if ((value ^ (value << 1)) != 0)
             {
-                // return the free block   
-                return (!Get(layer, i)) ? i : i + 1;
+                uint64_t block = (i * BitmapUnit);
+                for (; value; value >>= 2, block += 2)
+                {
+                    bool first = (value & 1) != 0;
+                    bool second = (value & 2) != 0;
+
+                    if (!first && second)
+                        return block;
+                    else if (first && !second)
+                        return block + 1;
+                }
             }
         }
     }
 
-    // haven't found any free block, just split a block from level 0
+    // haven't found any free block, so we split a block from level 0
     auto count = BlocksOnLayer(layer);
     for (uint64_t i = 0; i < count; i++)
     {
