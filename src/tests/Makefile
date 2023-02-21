@@ -18,6 +18,8 @@ OBJECTS_CPP=$(patsubst %.cpp, $(LOCAL_BUILD_DIR)/%.o, $(SOURCES_CPP))
 
 STATIC_LIBS=$(BUILD_DIR)/phallocators/libphallocators.a
 
+CXXFLAGS+=-DCATCH_AMALGAMATED_CUSTOM_MAIN
+
 .PHONY: all tests clean
 
 all: tests

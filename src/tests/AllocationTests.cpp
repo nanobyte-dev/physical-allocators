@@ -3,6 +3,14 @@
 #include <Config.hpp>
 #include <Utils.hpp>
 
+inline int Increment(int i)
+{
+    // for i smaller than 513, this will increment by 1
+    // then, it will increment faster and faster
+    // do this so that the tests are a bit faster, otherwise we have to wait forever for them to finish
+    return i + 1 + (i / 513) * (i / 513);
+}
+
 TEMPLATE_TEST_CASE("Simple allocation test", "[allocation]", ALL_ALLOCATORS)
 {
     TestType allocator;
@@ -16,7 +24,7 @@ TEMPLATE_TEST_CASE("Simple allocation test", "[allocation]", ALL_ALLOCATORS)
     REQUIRE(allocator.Allocate(0) == nullptr);
 
     // Allocate some blocks
-    for (int i = 1; i < ((MEM_SIZE / BLOCK_SIZE) * 3 / 4); i++)
+    for (int i = 1; i < ((MEM_SIZE / BLOCK_SIZE) * 3 / 4); i = Increment(i))
     {
         INFO(i);
 
@@ -67,7 +75,7 @@ TEMPLATE_TEST_CASE("Allocation test with some initial regions", "[allocation]", 
     REQUIRE(allocator.Allocate(0) == nullptr);
 
     // Allocate some blocks
-    for (int i = 1; i < ((MEM_SIZE / BLOCK_SIZE) * 3 / 4); i++)
+    for (int i = 1; i < ((MEM_SIZE / BLOCK_SIZE) * 3 / 4); i = Increment(i))
     {
         INFO(i);
 
