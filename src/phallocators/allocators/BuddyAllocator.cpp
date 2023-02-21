@@ -27,7 +27,7 @@ bool BuddyAllocator::InitializeImpl(RegionBlocks regions[], size_t regionCount)
     RegionBlocks *freeRegion = nullptr;
     for (size_t i = 0; i < regionCount; i++)
     {
-        if (regions[i].Type == RegionType::Free && regions[i].Size >= m_BitmapSize)
+        if (regions[i].Type == RegionType::Free && regions[i].Size * m_BlockSize >= m_BitmapSize)
             freeRegion = &regions[i];
     }
 

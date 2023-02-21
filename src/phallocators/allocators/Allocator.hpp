@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <vector>
 #include "../util/JsonWriter.hpp"
+#include "../math/MathHelpers.hpp"
 
 enum class RegionType
 {
@@ -52,6 +53,13 @@ protected:
     {
         uint8_t* u8Ptr = reinterpret_cast<uint8_t*>(ptr);
         return (u8Ptr - m_MemBase) / m_BlockSize;
+    }
+
+    template<typename TPtr>
+    inline uint64_t ToBlockRoundUp(TPtr ptr)
+    {
+        uint8_t* u8Ptr = reinterpret_cast<uint8_t*>(ptr);
+        return DivRoundUp(static_cast<uint64_t>(u8Ptr - m_MemBase), m_BlockSize);
     }
 
     inline ptr_t ToPtr(uint64_t block)

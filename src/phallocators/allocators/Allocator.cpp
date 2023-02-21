@@ -7,7 +7,7 @@
 template <typename T>
 void ArrayDeleteElement(T array[], size_t indexToDelete, size_t& count)
 {
-    memmove(array + indexToDelete, array + indexToDelete + 1, count - indexToDelete - 1);
+    memmove(array + indexToDelete, array + indexToDelete + 1, sizeof(T) * (count - indexToDelete - 1));
     --count;
 }
 
@@ -36,9 +36,18 @@ bool Allocator::Initialize(uint64_t blockSize, const Region regions[], size_t re
     RegionBlocks tempRegions[1024];
     for (size_t i = 0; i < regionCount; i++)
     {
-        tempRegions[i].Base = ToBlock(regions[i].Base);
-        tempRegions[i].Size = DivRoundUp(regions[i].Size, blockSize);
+        if (regions[i].Type == RegionType::Free) 
+        {
+            tempRegions[i].Base = ToBlockRoundUp(regions[i].Base);
+            tempRegions[i].Size = regions[i].Size / blockSize;
+        }
+        else 
+        {
+            tempRegions[i].Base = ToBlock(regions[i].Base);
+            tempRegions[i].Size = DivRoundUp(regions[i].Size, blockSize);
+        }
         tempRegions[i].Type = regions[i].Type;
+
     }
     //assert(regionCount < 1024);
 
@@ -81,16 +90,15 @@ void Allocator::FixOverlappingRegions(RegionBlocks regions[], size_t& regionCoun
         }
         else if (i < regionCount - 1)
         {
-            // Free regions overlapping/touching? Merge them
-            if (regions[i].Type == RegionType::Free &&
-                regions[i].Type == regions[i+1].Type &&
+            // Regions of the same type overlapping/touching? Merge them
+            if (regions[i].Type == regions[i+1].Type &&
                 regions[i].Base + regions[i].Size >= regions[i+1].Base)
             {
                 uint64_t end = std::max(regions[i].Base + regions[i].Size,
                                         regions[i+1].Base + regions[i+1].Size);
                 regions[i].Size = end - regions[i].Base;
                 
-                ArrayDeleteElement(regions, i, regionCount);
+                ArrayDeleteElement(regions, i + 1, regionCount);
                 --i;
             }
 

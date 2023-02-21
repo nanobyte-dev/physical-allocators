@@ -22,7 +22,7 @@ bool BitmapAllocator::InitializeImpl(RegionBlocks regions[], size_t regionCount)
     RegionBlocks *freeRegion = nullptr;
     for (size_t i = 0; i < regionCount; i++)
     {
-        if (regions[i].Type == RegionType::Free && regions[i].Size >= m_BitmapSize)
+        if (regions[i].Type == RegionType::Free && regions[i].Size * m_BlockSize >= m_BitmapSize)
             freeRegion = &regions[i];
     }
 
@@ -76,8 +76,18 @@ void BitmapAllocator::Free(ptr_t base, uint32_t blocks)
 
 void BitmapAllocator::MarkRegion(ptr_t basePtr, size_t sizeBytes, bool isUsed)
 {
-    uint64_t base = ToBlock(basePtr);
-    size_t size = DivRoundUp(sizeBytes, m_BlockSize);
+    uint64_t base; 
+    size_t size;
+    
+    if (isUsed) {
+        base = ToBlock(basePtr);
+        size = DivRoundUp(sizeBytes, m_BlockSize);
+    }
+    else {
+        base = ToBlockRoundUp(basePtr);
+        size = sizeBytes / m_BlockSize;
+    }
+
     MarkBlocks(base, size, isUsed);
 }
 
@@ -128,16 +138,16 @@ uint64_t BitmapAllocatorFirstFit::FindFreeRegion(uint32_t blocks)
 {
     uint64_t currentRegionStart = 0;
     size_t currentRegionSize = 0;
-    bool currentRegionReset = true;
 
     for (uint64_t i = 0; i <= m_MemSize / BlocksPerUnit; i++)
     {
         // used
         if (m_Bitmap[i] == static_cast<BitmapUnitType>(-1))
         {
-            currentRegionReset = true;
+            currentRegionSize = 0;
+            currentRegionStart = i * BlocksPerUnit + 1;
         }
-        else 
+        else
         {
             BitmapUnitType val = m_Bitmap[i];
             for (size_t off = 0; off < BlocksPerUnit && (i * BlocksPerUnit + off) < m_MemSize; off++, val>>=1)
@@ -145,18 +155,12 @@ uint64_t BitmapAllocatorFirstFit::FindFreeRegion(uint32_t blocks)
                 // region is used
                 if (val & 1)
                 {
-                    currentRegionReset = true;
+                    currentRegionSize = 0;
+                    currentRegionStart = i * BlocksPerUnit + off + 1;
                 }
                 else
                 {
-                    if (currentRegionReset)
-                    {
-                        currentRegionSize = 1;
-                        currentRegionStart = i * BlocksPerUnit + off;
-                        currentRegionReset = false;
-                    }
-                    else currentRegionSize++;
-
+                    currentRegionSize++;
                     if (currentRegionSize >= blocks)
                         return currentRegionStart;
                 }
@@ -176,35 +180,31 @@ BitmapAllocatorNextFit::BitmapAllocatorNextFit()
     
 uint64_t BitmapAllocatorNextFit::FindFreeRegion(uint32_t blocks)
 {
-    size_t currentRegionSize = 0;
-    uint64_t currentRegionStart = 0;
-    bool currentRegionReset = true;
-
     // Next fit only makes sense if the block previous to m_Next is used
     if (m_Next > 0 && !Get(m_Next - 1))
         m_Next = 0;
+
+    size_t currentRegionSize = 0;
+    uint64_t currentRegionStart = m_Next % m_MemSize;
 
     for (uint64_t it = 0; it < m_MemSize; it++)
     {
         uint64_t i = (it + m_Next) % m_MemSize;
         if (i == 0)
-            currentRegionReset = true;
+        {
+            currentRegionSize = 0;
+            currentRegionStart = 0;
+        }
 
         // used
         if (Get(i))
         {
-            currentRegionReset = true;
+            currentRegionSize = 0;
+            currentRegionStart = i + 1;
         }
         else
         {
-            if (currentRegionReset)
-            {
-                currentRegionSize = 1;
-                currentRegionStart = i;
-                currentRegionReset = false;
-            }
-            else currentRegionSize++;
-
+            currentRegionSize++;
             if (currentRegionSize >= blocks) {
                 m_Next = (currentRegionStart + 1) % m_MemSize;
                 return currentRegionStart;
