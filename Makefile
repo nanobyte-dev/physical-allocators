@@ -1,6 +1,6 @@
 export BUILD_DIR=$(abspath build)
 export CXX=g++
-#export CXXFLAGS=-ggdb -I. -I$(abspath src) -Wall
+#export CXXFLAGS=-ggdb -std=c++17 -I. -I$(abspath src) -Wall
 export CXXFLAGS=-ggdb -std=c++17 -O2 -I. -I$(abspath src) -Wall
 export AR=ar
 

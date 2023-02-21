@@ -1,7 +1,5 @@
-//#define ALLOCATOR               BitmapAllocator
-//#define ALLOCATOR               BuddyAllocator
-#define ALLOCATOR               LinkedListAllocator
-#define STRATEGY                STRATEGY_FIRST_FIT
+
+#define BLOCK_SIZE_1_RATIO      75
 
 #define MEM_SIZE                (32 * 1024 * 1024)
 #define BLOCK_SIZE              4096

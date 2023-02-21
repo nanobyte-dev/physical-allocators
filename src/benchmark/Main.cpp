@@ -7,10 +7,11 @@
 #include <phallocators/allocators/experiments/BBSTAllocator.hpp>
 #include <phallocators/allocators/experiments/DualBBSTAllocator.hpp>
 #include "SpeedBenchmarks.hpp"
+#include "FragmentationBenchmark.hpp"
 #include <algorithm>
 #include <iomanip>
 
-#define ITERATIONS 1000
+#define ITERATIONS 10000
 
 double ToMicroseconds(double seconds)
 {
@@ -88,7 +89,69 @@ void SpeedBenchmarks()
     DoSpeedBenchmarks<DualBBSTAllocator>();
 }
 
+
+
+template<typename TAllocator>
+void DoFragmentationBenchmark()
+{
+    std::vector<double> frags(ITERATIONS);
+
+    for (int i = 0; i < ITERATIONS; i++)
+    {
+        FragmentationBenchmark<TAllocator> bench(i + SRAND);
+        bench.Setup();
+        frags[i] = bench.Run();
+    }
+
+    // calculate avg
+    double avg = std::reduce(frags.begin(), frags.end()) / static_cast<double>(ITERATIONS);
+
+    // 95th percentiles
+    std::sort(frags.begin(), frags.end());
+    double low_95th = frags[ITERATIONS * 95 / 100];
+    double high_95th = frags[ITERATIONS - (ITERATIONS * 95 / 100)];
+
+    // standard deviation
+    double std_dev = 0;
+    for (double frag : frags)
+        std_dev += (frag - avg) * (frag - avg);
+    std_dev = sqrt(std_dev / static_cast<double>(ITERATIONS));
+
+    // print results
+    std::cout.precision(8);
+
+    std::cout << typeid(TAllocator).name() << ";";
+    std::cout << avg << ";";
+    std::cout << low_95th << ";";
+    std::cout << high_95th << ";";
+    std::cout << std_dev << std::endl;
+}
+
+void FragmentationBenchmarks()
+{
+    // print header
+    std::cout<<"Fragmentation benchmark;";
+    std::cout<<"Average (us);";
+    std::cout<<"Low 95th (us);";
+    std::cout<<"High 95th (us);";
+    std::cout<<"Std dev (us)" << std::endl;
+
+    DoFragmentationBenchmark<BitmapAllocatorFirstFit>();
+    DoFragmentationBenchmark<BitmapAllocatorNextFit>();
+    DoFragmentationBenchmark<BitmapAllocatorBestFit>();
+    DoFragmentationBenchmark<BitmapAllocatorWorstFit>();
+    DoFragmentationBenchmark<BuddyAllocator>();
+    DoFragmentationBenchmark<LinkedListAllocatorFirstFit>();
+    DoFragmentationBenchmark<LinkedListAllocatorNextFit>();
+    DoFragmentationBenchmark<LinkedListAllocatorBestFit>();
+    DoFragmentationBenchmark<LinkedListAllocatorWorstFit>();
+    DoFragmentationBenchmark<BSTAllocator>();
+    DoFragmentationBenchmark<BBSTAllocator>();
+    DoFragmentationBenchmark<DualBBSTAllocator>();
+}
+
 int main()
 {
     SpeedBenchmarks();
+    // FragmentationBenchmarks();
 }

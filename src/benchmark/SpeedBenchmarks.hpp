@@ -9,7 +9,6 @@
 #include "Clock.hpp"
 
 #define MAX_USED_REGIONS 5000
-#define BLOCK_SIZE_1_RATIO 75
 #define INIT_ITERATIONS 100
 #define TEST_ITERATIONS 100
 
