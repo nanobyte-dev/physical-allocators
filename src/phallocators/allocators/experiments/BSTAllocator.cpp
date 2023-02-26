@@ -82,9 +82,7 @@ ptr_t BSTAllocator::AllocateInternal(uint32_t blocks, RegionType type)
         return nullptr;
 
     // find region
-    BSTBlock* found = GetFirst();
-    while (found != nullptr && (found->Type != RegionType::Free || found->Size < blocks))
-        found = GetSuccessor(found);
+    BSTBlock* found = FindFreeRegion(m_Root, blocks);
 
     // out of memory?
     if (found == nullptr)
@@ -100,6 +98,7 @@ ptr_t BSTAllocator::AllocateInternal(uint32_t blocks, RegionType type)
     }
     else
     {
+        // size not equal, split block in 2
         BSTBlock* newBlock = NewBlock();
         newBlock->Set(found->Base, blocks, type);
 
@@ -112,6 +111,25 @@ ptr_t BSTAllocator::AllocateInternal(uint32_t blocks, RegionType type)
     }
 
     return ret;    
+}
+
+BSTBlock* BSTAllocator::FindFreeRegion(BSTBlock* root, size_t blocks)
+{
+    // find region
+    if (root == nullptr)
+        return nullptr;
+
+    // found
+    if (root->Type == RegionType::Free && root->Size >= blocks)
+        return root;
+
+    // go left
+    BSTBlock* left = FindFreeRegion(root->Left, blocks);
+    if (left != nullptr)
+        return left;
+
+    // go right
+    return FindFreeRegion(root->Right, blocks);
 }
 
 void BSTAllocator::Free(void* basePtr, uint32_t blocks)

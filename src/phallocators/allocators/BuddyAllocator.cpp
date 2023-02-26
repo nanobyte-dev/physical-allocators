@@ -7,8 +7,6 @@
 #include <iostream>
 #include <sstream>
 
-#define LAYER_COUNT 10
-
 BuddyAllocator::BuddyAllocator()
     : Allocator(),
       m_LastAllocatedBlock(0),
@@ -19,7 +17,7 @@ BuddyAllocator::BuddyAllocator()
 bool BuddyAllocator::InitializeImpl(RegionBlocks regions[], size_t regionCount)
 {
     m_SmallBlockSize = m_BlockSize;
-    m_BigBlockSize = m_BlockSize * (1 << (LAYER_COUNT - 1));
+    m_BigBlockSize = m_BlockSize * (1ull << (LAYER_COUNT - 1));
     m_BlocksLayer0 = DivRoundUp(m_MemSizeBytes, m_BigBlockSize);
     m_BitmapSize = IndexOfLayer(LAYER_COUNT);
 
@@ -66,42 +64,32 @@ ptr_t BuddyAllocator::Allocate(uint32_t blocks)
     if (blocks == 0)
         return nullptr;
 
-    // figure out closest layer
-    int layer = LAYER_COUNT - 1 - Log2(blocks) - (IsPowerOf2(blocks) ? 0 : 1);
-
     // number of blocks is larger than any block size we store in the bitmaps
     // so we need to search using the same tactic as in the bitmap allocator
     // but on the last layer (with the biggest blocks)
-    if (layer < 0)
+    if (blocks > m_BigBlockSize)
     {
         size_t currentRegionCount = 0;
         uint64_t currentRegionStart = 0;
-        bool currentRegionReset = true;
 
         for (uint64_t i = 0; i < BlocksOnLayer(0); i++)
         {
             // used
             if (Get(0, i))
             {
-                currentRegionReset = true;
+                currentRegionCount = 0;
+                currentRegionStart = i + 1;
             }
             else
             {
-                if (currentRegionReset)
-                {
-                    currentRegionCount = 1;
-                    currentRegionStart = i;
-                    currentRegionReset = false;
-                }
-                else currentRegionCount++;
-
+                currentRegionCount++;
                 if (currentRegionCount * (1 << (LAYER_COUNT - 1)) >= blocks)
                 {
                     m_LastAllocatedBlock = currentRegionStart;
                     m_LastAllocatedCount = currentRegionCount;
                     m_LastAllocatedLayer = 0;
 
-                    uint64_t base = currentRegionStart * (1 << (LAYER_COUNT - 1));
+                    uint64_t base = currentRegionStart * (1ull << (LAYER_COUNT - 1));
                     MarkBlocks(base, blocks, true);
                     return ToPtr(base);
                 }
@@ -110,6 +98,7 @@ ptr_t BuddyAllocator::Allocate(uint32_t blocks)
     }
     else
     {
+        int layer = GetNearestLayer(blocks);
         int layerFound = layer;
         uint64_t iFound = FindFreeBlock(layerFound);
 
@@ -138,7 +127,7 @@ ptr_t BuddyAllocator::Allocate(uint32_t blocks)
         m_LastAllocatedCount = 1;
         m_LastAllocatedLayer = layer;
 
-        uint64_t base = i * (1 << (LAYER_COUNT - 1 - layer));
+        uint64_t base = i * (1ull << (LAYER_COUNT - 1 - layer));
         return ToPtr(base);
     }
 
@@ -190,12 +179,14 @@ uint64_t BuddyAllocator::FindFreeBlock(int& layer)
 void BuddyAllocator::Free(ptr_t base, uint32_t blocks)
 {
     // figure out closest layer
-    int layer = LAYER_COUNT - 1 - Log2(blocks) - (IsPowerOf2(blocks) ? 0 : 1);
-    if (layer < 0) {
-        MarkBlocks(ToBlock(base), blocks, false);
-    }
-    else {
+    if (blocks <= m_BigBlockSize)
+    {
         MarkBlocks(ToBlock(base), RoundToPowerOf2(blocks), false);
+    }
+    else 
+    {
+        blocks = DivRoundUp(blocks, m_BigBlockSize) * m_BigBlockSize;
+        MarkBlocks(ToBlock(base), blocks, false);
     }
 }
 

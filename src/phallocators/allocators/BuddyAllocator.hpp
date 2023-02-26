@@ -1,6 +1,8 @@
 #include "Allocator.hpp"
 #include "../math/MathHelpers.hpp"
 
+#define LAYER_COUNT 10
+
 class BuddyAllocator : public Allocator
 {
 public:
@@ -22,12 +24,17 @@ private:
 
     inline uint64_t BlocksOnLayer(int layer)
     {
-        return (1 << layer) * m_BlocksLayer0;
+        return (1ull << layer) * m_BlocksLayer0;
     }
 
     inline uint64_t IndexOfLayer(int layer)
     {
-        return DivRoundUp(m_BlocksLayer0, BitmapUnit) * ((1 << layer) - 1);
+        return DivRoundUp(m_BlocksLayer0, BitmapUnit) * ((1ull << layer) - 1);
+    }
+
+    inline int GetNearestLayer(int numberOfBlocks)
+    {
+        return LAYER_COUNT - 1 - Log2(blocks) - (IsPowerOf2(blocks) ? 0 : 1);
     }
 
     inline bool Get(int layer, uint64_t block)

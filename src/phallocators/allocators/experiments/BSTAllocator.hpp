@@ -45,6 +45,7 @@ protected:
     
 private:
     ptr_t AllocateInternal(uint32_t blocks, RegionType type);
+    BSTBlock* FindFreeRegion(BSTBlock* root, size_t blocks);
 
     // Pool management
     BSTBlock* NewBlock();
