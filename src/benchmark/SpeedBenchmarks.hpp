@@ -9,7 +9,7 @@
 #include "Clock.hpp"
 
 #define MAX_USED_REGIONS 5000
-#define INIT_ITERATIONS 100
+#define INIT_ITERATIONS 500
 #define TEST_ITERATIONS 100
 
 template<typename TAllocator>

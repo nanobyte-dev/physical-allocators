@@ -8,7 +8,7 @@
 #include <memory>
 
 #define MAX_USED_REGIONS 5000
-#define ITERATIONS 2000
+#define FRAG_ITERATIONS 2000
 #define MEASURE_ITERATIONS 100
 
 template<typename TAllocator>
@@ -45,7 +45,7 @@ public:
     {
         double totalFragmentation = 0.0;
 
-        for (int i = 0; i < ITERATIONS; i++)
+        for (int i = 0; i < FRAG_ITERATIONS; i++)
         {
             bool alloc;
 
@@ -66,7 +66,7 @@ public:
                 totalFragmentation += MeasureFragmentation();
         }
 
-        return totalFragmentation / static_cast<double>(ITERATIONS / MEASURE_ITERATIONS);
+        return totalFragmentation / static_cast<double>(FRAG_ITERATIONS / MEASURE_ITERATIONS);
     }
 
 protected:

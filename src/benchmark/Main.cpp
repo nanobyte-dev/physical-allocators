@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <iomanip>
 
-#define ITERATIONS 10000
+#define ITERATIONS 250
 
 double ToMicroseconds(double seconds)
 {
@@ -47,10 +47,11 @@ void DoSpeedBenchmark(Args... args)
     // print results
     std::cout.precision(8);
 
-    std::cout << typeid(TBenchmark).name() << " - ";
+    std::cout << typeid(TBenchmark).name() << "|";
     ((std::cout << args << " "), ...);
     std::cout << ";";
-
+    std::cout << MEM_SIZE << ";";
+    std::cout << BLOCK_SIZE_1_RATIO << ";";
     std::cout << avg << ";";
     std::cout << low_95th << ";";
     std::cout << high_95th << ";";
@@ -69,11 +70,11 @@ void DoSpeedBenchmarks()
 void SpeedBenchmarks()
 {
     // print header
-    std::cout<<"Speed benchmark;";
-    std::cout<<"Average (us);";
-    std::cout<<"Low 95th (us);";
-    std::cout<<"High 95th (us);";
-    std::cout<<"Std dev (us)" << std::endl;
+    // std::cout<<"Speed benchmark;";
+    // std::cout<<"Average (us);";
+    // std::cout<<"Low 95th (us);";
+    // std::cout<<"High 95th (us);";
+    // std::cout<<"Std dev (us)" << std::endl;
 
     DoSpeedBenchmarks<BitmapAllocatorFirstFit>();
     DoSpeedBenchmarks<BitmapAllocatorNextFit>();
@@ -121,6 +122,8 @@ void DoFragmentationBenchmark()
     std::cout.precision(8);
 
     std::cout << typeid(TAllocator).name() << ";";
+    std::cout << MEM_SIZE << ";";
+    std::cout << BLOCK_SIZE_1_RATIO << ";";
     std::cout << avg << ";";
     std::cout << low_95th << ";";
     std::cout << high_95th << ";";

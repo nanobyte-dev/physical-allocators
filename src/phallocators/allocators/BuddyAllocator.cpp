@@ -17,7 +17,7 @@ BuddyAllocator::BuddyAllocator()
 bool BuddyAllocator::InitializeImpl(RegionBlocks regions[], size_t regionCount)
 {
     m_SmallBlockSize = m_BlockSize;
-    m_BigBlockSize = m_BlockSize * (1ull << (LAYER_COUNT - 1));
+    m_BigBlockSize = m_BlockSize * BIG_BLOCK_MULTIPLIER;
     m_BlocksLayer0 = DivRoundUp(m_MemSizeBytes, m_BigBlockSize);
     m_BitmapSize = IndexOfLayer(LAYER_COUNT);
 
@@ -67,7 +67,7 @@ ptr_t BuddyAllocator::Allocate(uint32_t blocks)
     // number of blocks is larger than any block size we store in the bitmaps
     // so we need to search using the same tactic as in the bitmap allocator
     // but on the last layer (with the biggest blocks)
-    if (blocks > m_BigBlockSize)
+    if (blocks > BIG_BLOCK_MULTIPLIER)
     {
         size_t currentRegionCount = 0;
         uint64_t currentRegionStart = 0;
@@ -83,13 +83,13 @@ ptr_t BuddyAllocator::Allocate(uint32_t blocks)
             else
             {
                 currentRegionCount++;
-                if (currentRegionCount * (1 << (LAYER_COUNT - 1)) >= blocks)
+                if (currentRegionCount * BIG_BLOCK_MULTIPLIER >= blocks)
                 {
                     m_LastAllocatedBlock = currentRegionStart;
                     m_LastAllocatedCount = currentRegionCount;
                     m_LastAllocatedLayer = 0;
 
-                    uint64_t base = currentRegionStart * (1ull << (LAYER_COUNT - 1));
+                    uint64_t base = currentRegionStart * BIG_BLOCK_MULTIPLIER;
                     MarkBlocks(base, blocks, true);
                     return ToPtr(base);
                 }
@@ -117,8 +117,7 @@ ptr_t BuddyAllocator::Allocate(uint32_t blocks)
         int countBubble = 2;
         for (int l = layer + 1; l < LAYER_COUNT; l++, iBubble <<= 1, countBubble <<= 1)
         {
-            for (int j = 0; j < countBubble; j++)
-                Set(l, iBubble + j, true);
+            SetBulk(l, iBubble, countBubble, true);
         }
 
         // i points to index of block we want to return
@@ -147,19 +146,14 @@ uint64_t BuddyAllocator::FindFreeBlock(int& layer)
         {
             // a block is considered free if its buddy is used (e.g. 01 or 10)
             auto value = m_Bitmap[index + i];
-            if ((value ^ (value << 1)) != 0)
+            auto pairs = ((value & 0xAA) >> 1) ^ (value & 0x55);
+            if (pairs != 0)
             {
-                uint64_t block = (i * BitmapUnit);
-                for (; value; value >>= 2, block += 2)
-                {
-                    bool first = (value & 1) != 0;
-                    bool second = (value & 2) != 0;
-
-                    if (!first && second)
-                        return block;
-                    else if (first && !second)
-                        return block + 1;
-                }
+                auto index = Log2(pairs);
+                if ((value & (1 << index)) == 0)
+                    return (i * BitmapUnit) + index;
+                else
+                    return (i * BitmapUnit) + index + 1;
             }
         }
     }
@@ -179,13 +173,12 @@ uint64_t BuddyAllocator::FindFreeBlock(int& layer)
 void BuddyAllocator::Free(ptr_t base, uint32_t blocks)
 {
     // figure out closest layer
-    if (blocks <= m_BigBlockSize)
+    if (blocks <= BIG_BLOCK_MULTIPLIER)
     {
         MarkBlocks(ToBlock(base), RoundToPowerOf2(blocks), false);
     }
     else 
     {
-        blocks = DivRoundUp(blocks, m_BigBlockSize) * m_BigBlockSize;
         MarkBlocks(ToBlock(base), blocks, false);
     }
 }
@@ -200,8 +193,7 @@ void BuddyAllocator::MarkRegion(ptr_t basePtr, size_t sizeBytes, bool isUsed)
 void BuddyAllocator::MarkBlocks(uint64_t block, size_t count, bool isUsed)
 {
     // start by marking everything on the last layer
-    for (uint64_t i = block; i < block + count; i++)
-        Set(LAYER_COUNT - 1, i, isUsed);
+    SetBulk(LAYER_COUNT - 1, block, count, isUsed);
 
     // bubble up all the way to layer 0
     for (int layer = LAYER_COUNT - 2; layer >= 0; layer--)
@@ -215,6 +207,26 @@ void BuddyAllocator::MarkBlocks(uint64_t block, size_t count, bool isUsed)
         }
     }
 }
+
+void BuddyAllocator::SetBulk(int layer, uint64_t base, uint64_t count, bool isUsed)
+{
+    // partial byte at the beginning
+    for (; base % 8 && count > 0; ++base, --count)
+        Set(layer, base, isUsed);
+
+    // entire bytes in the middle
+    if (count >= 8)
+    {
+        memset(reinterpret_cast<uint8_t*>(m_Bitmap) + IndexOfLayer(layer) + base / 8, isUsed ? 0xFF : 0, count / 8);
+        base += (count - count % 8);
+        count = count % 8;
+    }
+
+    // partial byte at the end
+    for (; count > 0; ++base, --count)
+        Set(layer, base, isUsed);
+}
+
 
 // for statistics
 RegionType BuddyAllocator::GetState(ptr_t address)

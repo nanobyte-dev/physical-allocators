@@ -2,6 +2,7 @@
 #include "../math/MathHelpers.hpp"
 
 #define LAYER_COUNT 10
+#define BIG_BLOCK_MULTIPLIER (1ull << (LAYER_COUNT - 1))
 
 class BuddyAllocator : public Allocator
 {
@@ -32,7 +33,7 @@ private:
         return DivRoundUp(m_BlocksLayer0, BitmapUnit) * ((1ull << layer) - 1);
     }
 
-    inline int GetNearestLayer(int numberOfBlocks)
+    inline int GetNearestLayer(int blocks)
     {
         return LAYER_COUNT - 1 - Log2(blocks) - (IsPowerOf2(blocks) ? 0 : 1);
     }
@@ -53,6 +54,8 @@ private:
         else
             m_Bitmap[addr] &= ~(1 << offset);
     }
+
+    void SetBulk(int layer, uint64_t blockStart, uint64_t count, bool value);
 
     uint64_t m_SmallBlockSize;
     uint64_t m_BigBlockSize;
