@@ -365,3 +365,14 @@ void BSTAllocator::DumpImpl(JsonWriter& writer)
 
     writer.EndArray();
 }
+
+uint64_t BSTAllocator::MeasureWastedMemory()
+{
+    uint64_t total = DivRoundUp(sizeof(*this), m_BlockSize);
+    for (auto current = GetFirst(); current != nullptr; current = GetSuccessor(current))
+    {
+        if (current->Type == RegionType::Allocator)
+            total += current->Size;
+    }
+    return total;
+}

@@ -7,15 +7,14 @@
 #include <cassert>
 #include <memory>
 
-#define MAX_USED_REGIONS 5000
-#define FRAG_ITERATIONS 2000
-#define MEASURE_ITERATIONS 100
+#define FRAG_ITERATIONS 10000
+#define MEASURE_ITERATIONS 500
 
 template<typename TAllocator>
-class FragmentationBenchmark
+class FragmentationAndWasteBenchmark
 {
 public:
-    FragmentationBenchmark(int seed)
+    FragmentationAndWasteBenchmark(int seed)
         : m_Seed(seed),
           m_BasePtr(new uint8_t[MEM_SIZE]),
           m_Generator(seed),
@@ -39,11 +38,31 @@ public:
         m_Allocator = std::make_unique<TAllocator>();
         InitializeAllocator();
         m_AllocatedRegions.clear();
+
+        // allocate ~50% of memory
+        while (m_FreeBlocks > m_TotalBlocks / 2)
+        {
+            bool alloc;
+            if (m_AllocatedRegions.empty())
+                alloc = true;
+            else if (m_FreeBlocks == 0)
+                alloc = false;
+            else
+                alloc = (m_RandPercent(m_Generator) < 75) == 0;
+
+            AllocRandomBlock();
+
+            if (alloc)
+                AllocRandomBlock();
+            else
+                FreeRandomBlock();
+        }
     }
 
-    double Run()
+    std::pair<double, double> Run()
     {
         double totalFragmentation = 0.0;
+        double totalWaste = 0.0;
 
         for (int i = 0; i < FRAG_ITERATIONS; i++)
         {
@@ -62,11 +81,15 @@ public:
                 FreeRandomBlock();
 
 
-            if (i % MEASURE_ITERATIONS == 0)
-                totalFragmentation += MeasureFragmentation();
+            if (i % MEASURE_ITERATIONS == 0) {
+                totalFragmentation += MeasureFragmentation() / static_cast<double>(FRAG_ITERATIONS / MEASURE_ITERATIONS);
+                
+                uint64_t wastedBlocks = m_Allocator->MeasureWastedMemory() * BLOCK_SIZE;
+                totalWaste += wastedBlocks / static_cast<double>(FRAG_ITERATIONS / MEASURE_ITERATIONS);
+            }
         }
 
-        return totalFragmentation / static_cast<double>(FRAG_ITERATIONS / MEASURE_ITERATIONS);
+        return std::make_pair(totalFragmentation, totalWaste);
     }
 
 protected:

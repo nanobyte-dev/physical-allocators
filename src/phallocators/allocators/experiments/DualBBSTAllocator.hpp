@@ -27,6 +27,7 @@ public:
     
     // for statistics
     RegionType GetState(ptr_t address) override;
+    uint64_t MeasureWastedMemory() override;
 
 protected:
     bool InitializeImpl(RegionBlocks regions[], size_t regionCount) override;

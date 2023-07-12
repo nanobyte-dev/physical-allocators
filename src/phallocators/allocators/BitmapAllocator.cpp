@@ -134,6 +134,11 @@ void BitmapAllocator::DumpImpl(JsonWriter& writer)
     writer.Property("bitmap", bitmap.str());
 }
 
+uint64_t BitmapAllocator::MeasureWastedMemory()
+{
+    return DivRoundUp(sizeof(*this) + m_BitmapSize, m_BlockSize);
+}
+
 uint64_t BitmapAllocatorFirstFit::FindFreeRegion(uint32_t blocks)
 {
     uint64_t currentRegionStart = 0;

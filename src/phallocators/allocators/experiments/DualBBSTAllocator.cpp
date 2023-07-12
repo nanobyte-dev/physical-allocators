@@ -158,3 +158,12 @@ void DualBBSTAllocator::DumpImpl(JsonWriter& writer)
 
     writer.EndArray();
 }
+
+uint64_t DualBBSTAllocator::MeasureWastedMemory()
+{
+    // not accurate
+    size_t freeSize = sizeof(m_FreeMap) + m_FreeMap.size() * sizeof(std::multimap<uint64_t, DualBBSTBlock>::node_type);
+    size_t usedSize = sizeof(m_ReservedMap) + m_ReservedMap.size() * sizeof(std::multimap<uint64_t, DualBBSTBlock>::node_type);
+    return DivRoundUp(sizeof(*this) + freeSize + usedSize, m_BlockSize);
+}
+

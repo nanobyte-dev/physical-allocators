@@ -132,3 +132,10 @@ void BBSTAllocator::DumpImpl(JsonWriter& writer)
 
     writer.EndArray();
 }
+
+uint64_t BBSTAllocator::MeasureWastedMemory()
+{
+    // not accurate
+    size_t mapSize = sizeof(m_Map) + m_Map.size() * sizeof(std::multimap<uint64_t, BBSTBlock>::node_type);
+    return DivRoundUp(sizeof(*this) + mapSize, m_BlockSize);
+}

@@ -10,7 +10,8 @@
 BuddyAllocator::BuddyAllocator()
     : Allocator(),
       m_LastAllocatedBlock(0),
-      m_LastAllocatedLayer(-1)
+      m_LastAllocatedLayer(-1),
+      m_Waste(0)
 {
 }
 
@@ -126,6 +127,10 @@ ptr_t BuddyAllocator::Allocate(uint32_t blocks)
         m_LastAllocatedCount = 1;
         m_LastAllocatedLayer = layer;
 
+#ifdef MEASURE_WASTE
+        m_Waste += RoundToPowerOf2(blocks) - blocks;
+#endif
+
         uint64_t base = i * (1ull << (LAYER_COUNT - 1 - layer));
         return ToPtr(base);
     }
@@ -175,6 +180,9 @@ void BuddyAllocator::Free(ptr_t base, uint32_t blocks)
     // figure out closest layer
     if (blocks <= BIG_BLOCK_MULTIPLIER)
     {
+#ifdef MEASURE_WASTE
+        m_Waste -= RoundToPowerOf2(blocks) - blocks;
+#endif
         MarkBlocks(ToBlock(base), RoundToPowerOf2(blocks), false);
     }
     else 
@@ -273,4 +281,9 @@ void BuddyAllocator::DumpImpl(JsonWriter& writer)
     }
 
     writer.EndObject();
+}
+
+uint64_t BuddyAllocator::MeasureWastedMemory()
+{
+    return DivRoundUp(sizeof(*this) + m_BitmapSize, m_BlockSize) + m_Waste;
 }

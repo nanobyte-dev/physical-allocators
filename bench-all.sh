@@ -1,4 +1,4 @@
-MEM_SIZES=(1024)
+MEM_SIZES=(32 128 512 1024)
 BLOCK_SIZE1_RATIOS=(0 25 50 75 100)
 
 HEADER="Test;Memory size;Block 1 ratio;Average (us);Low 95th (us);High 95th (us);Std dev (us)"

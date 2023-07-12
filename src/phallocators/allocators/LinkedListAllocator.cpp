@@ -286,6 +286,17 @@ void LinkedListAllocator::DumpImpl(JsonWriter& writer)
     writer.EndArray();
 }
 
+uint64_t LinkedListAllocator::MeasureWastedMemory()
+{
+    uint64_t total = DivRoundUp(sizeof(*this), m_BlockSize);
+    for (auto current = m_First; current != nullptr; current = current->Next)
+    {
+        if (current->Type == RegionType::Allocator)
+            total += current->Size;
+    }
+    return total;
+}
+
 LinkedListBlock* LinkedListAllocatorFirstFit::FindFreeRegion(uint32_t blocks)
 {
     LinkedListBlock* current = m_First;

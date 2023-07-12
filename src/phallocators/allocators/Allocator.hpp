@@ -46,6 +46,7 @@ public:
     // for statistics
     virtual RegionType GetState(ptr_t address) = 0;
     void Dump(std::string filename = "");
+    virtual uint64_t MeasureWastedMemory() = 0; // in blocks
 
 protected:
     template<typename TPtr>
