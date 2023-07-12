@@ -4,7 +4,7 @@
 
 namespace
 {
-    static const char* const g_LogSeverityColors[] =
+    const char* const g_LogSeverityColors[] =
     {
         [DEBUG_LEVEL_DEBUG]        = "\033[2;37m",
         [DEBUG_LEVEL_INFO]         = "\033[37m",
@@ -13,7 +13,7 @@ namespace
         [DEBUG_LEVEL_CRITICAL]     = "\033[1;37;41m",
     };
     
-    static const char* const g_ColorReset = "\033[0m";
+    const char* const g_ColorReset = "\033[0m";
     FILE* g_OutputFile;
     bool g_Colored;
 }
@@ -31,7 +31,7 @@ static void Log(const char* module, int logLevel, const char* fmt, va_list args)
 {
     // set color depending on level
     if (g_Colored)
-        fprintf(g_OutputFile, g_LogSeverityColors[logLevel]);
+        fprintf(g_OutputFile, "%s", g_LogSeverityColors[logLevel]);
 
     // write module
     fprintf(g_OutputFile, "[%s] ", module);

@@ -1,11 +1,13 @@
 #pragma once
-#include <stdint.h>
+#include <cstdint>
 
+// does standard library contain bit operations?
 #ifdef __cpp_lib_bitops
-#include <bit>
-#define CountLeadingZeros(x) std::countl_zero(x)
+#   include <bit>
+#   define CountLeadingZeros(x) std::countl_zero(x)
 #else
-#define CountLeadingZeros(x) __builtin_clz(x)
+	// no - use compiler builtin clz function
+#   define CountLeadingZeros(x) __builtin_clz(x)
 #endif
 
 uint32_t RoundToPowerOf2(uint32_t x);

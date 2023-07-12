@@ -1,39 +1,41 @@
 #include "LinkedListAllocator.hpp"
-#include <algorithm>
 #include <memory.h>
+#include <cassert>
 #include <math/MathHelpers.hpp>
 #include <util/JsonWriter.hpp>
 
-void LinkedListBlock::Clear()
+void LinkedListRegion::Clear()
 {
-    this->BlockUsed = false;
+    this->ElementUsed = false;
 }
 
-void LinkedListBlock::Set(uint64_t base, 
-                          uint64_t size,
-                          RegionType type,
-                          LinkedListBlock* prev,
-                          LinkedListBlock* next)
+void LinkedListRegion::Set(uint64_t base,
+                           uint64_t size,
+                           RegionType type,
+                           LinkedListRegion* prev,
+                           LinkedListRegion* next)
 {
     this->Base = base;
     this->Size = size;
     this->Type = type;
     this->Prev = prev;
     this->Next = next;
-    this->BlockUsed = true;
+    this->ElementUsed = true;
 }
 
 LinkedListAllocator::LinkedListAllocator()
     : Allocator(),
       m_First(nullptr),
       m_Last(nullptr),
-      m_TotalCapacity(STATIC_POOL_SIZE),
-      m_UsedBlocks(0),
+      m_PoolCapacity(STATIC_POOL_SIZE),
+      m_PoolUsedElements(0),
+      m_FirstPool(),
+      m_StaticRegionPool(),
       m_CurrentPool(&m_FirstPool),
       m_CurrentPoolNextFree(0)
 {
-    memset(m_StaticBlockPool, 0, sizeof(m_StaticBlockPool));
-    m_FirstPool.Blocks = m_StaticBlockPool;
+    memset(m_StaticRegionPool, 0, sizeof(m_StaticRegionPool));
+    m_FirstPool.Elements = m_StaticRegionPool;
     m_FirstPool.Size = STATIC_POOL_SIZE;
     m_FirstPool.Next = &m_FirstPool;
 }
@@ -45,12 +47,12 @@ bool LinkedListAllocator::InitializeImpl(RegionBlocks regions[], size_t regionCo
 
     for (size_t i = 0; i < regionCount; i++)
     {
-        LinkedListBlock* block = NewBlock();
-        block->Set(regions[i].Base, regions[i].Size, regions[i].Type);
+        LinkedListRegion* region = NewRegion();
+        region->Set(regions[i].Base, regions[i].Size, regions[i].Type);
 
         // find insertion position
-        LinkedListBlock* insertPos = FindInsertionPosition(block->Base, block->Size);
-        InsertBlock(block, insertPos);
+        LinkedListRegion* insertPos = FindInsertionPosition(region->Base, region->Size);
+        InsertRegion(region, insertPos);
     }
 
     return true;
@@ -61,7 +63,7 @@ ptr_t LinkedListAllocator::Allocate(uint32_t blocks)
     ptr_t ret = AllocateInternal(blocks, RegionType::Reserved);
 
     // over 80% usage => add another block pool
-    if (m_UsedBlocks >= (m_TotalCapacity * 4) / 5)
+    if (m_PoolUsedElements >= (m_PoolCapacity * 4) / 5)
         GrowPool();
 
     return ret;
@@ -72,7 +74,7 @@ ptr_t LinkedListAllocator::AllocateInternal(uint32_t blocks, RegionType type)
     if (blocks == 0)
         return nullptr;
 
-    LinkedListBlock* found = FindFreeRegion(blocks);
+    LinkedListRegion* found = FindFreeRegion(blocks);
 
     // out of memory?
     if (found == nullptr)
@@ -87,52 +89,51 @@ ptr_t LinkedListAllocator::AllocateInternal(uint32_t blocks, RegionType type)
     }
     else
     {
-        LinkedListBlock* newBlock = NewBlock();
-        newBlock->Set(found->Base, blocks, type);
-        InsertBlock(newBlock, found);
+        LinkedListRegion* newRegion = NewRegion();
+        newRegion->Set(found->Base, blocks, type);
+        InsertRegion(newRegion, found);
 
         found->Base += blocks;
         found->Size -= blocks;
     }
 
-    return ret;    
+    return ret;
 }
 
 void LinkedListAllocator::Free(void* basePtr, uint32_t blocks)
 {
     uint64_t base = ToBlock(basePtr);
+    LinkedListRegion* current = FindRegion(base);
 
-    LinkedListBlock* current = m_First;
-    while (current != nullptr && base > current->Base)
-        current = current->Next;
-    
-    if (current == nullptr 
+    if (current == nullptr
         || current->Type == RegionType::Free
         || current->Base != base)
         return; // not found, or region is already free
 
     current->Type = RegionType::Free;
 
-    // can we merge with the previous block?
+    // can we merge with the previous region?
     if (current->Prev != nullptr && current->Prev->Type == RegionType::Free)
     {
         current = current->Prev;
         current->Size += current->Next->Size;
-        DeleteAndReleaseBlock(current->Next);
+        DeleteAndReleaseRegion(current->Next);
     }
 
-    // can we merge with the next block
+    // can we merge with the next region
     if (current->Next != nullptr && current->Next->Type == RegionType::Free)
     {
         current->Size += current->Next->Size;
-        DeleteAndReleaseBlock(current->Next);
+        DeleteAndReleaseRegion(current->Next);
     }
 
     // TODO: under 20% usage? compress and free up some pools
 }
 
-LinkedListBlock* LinkedListAllocator::NewBlock()
+LinkedListRegion* LinkedListAllocator::NewRegion()
 {
+    assert(m_PoolUsedElements < m_PoolCapacity);
+
     do {
         if (m_CurrentPoolNextFree >= m_CurrentPool->Size)
         {
@@ -144,112 +145,111 @@ LinkedListBlock* LinkedListAllocator::NewBlock()
             m_CurrentPool = &m_FirstPool;
             m_CurrentPoolNextFree = 0;
         }
-       
-    } while (m_CurrentPool->Blocks[m_CurrentPoolNextFree++].BlockUsed);
 
-    ++m_UsedBlocks;
-    return &m_CurrentPool->Blocks[m_CurrentPoolNextFree - 1];
+    } while (m_CurrentPool->Elements[m_CurrentPoolNextFree++].ElementUsed);
+
+    ++m_PoolUsedElements;
+    return &m_CurrentPool->Elements[m_CurrentPoolNextFree - 1];
 }
 
-void LinkedListAllocator::ReleaseBlock(LinkedListBlock* block)
+void LinkedListAllocator::ReleaseRegion(LinkedListRegion* region)
 {
-    block->Clear();
-    m_UsedBlocks--;
+    region->Clear();
+    m_PoolUsedElements--;
 }
 
 void LinkedListAllocator::GrowPool()
 {
     // allocate another pool
-    uint8_t* u8NewPool = reinterpret_cast<uint8_t*>(AllocateInternal(1, RegionType::Allocator));
-    
-    LinkedListBlockPool* newPool = reinterpret_cast<LinkedListBlockPool*>(u8NewPool);
-    newPool->Blocks = reinterpret_cast<LinkedListBlock*>(u8NewPool + sizeof(LinkedListBlockPool));
-    newPool->Size = (m_BlockSize - sizeof(LinkedListBlockPool)) / sizeof(LinkedListBlock);
-    memset(newPool->Blocks, 0, sizeof(LinkedListBlock) * newPool->Size);
+    auto* u8NewPool = reinterpret_cast<uint8_t*>(AllocateInternal(1, RegionType::Allocator));
+
+    auto* newPool = reinterpret_cast<LinkedListRegionPool*>(u8NewPool);
+    newPool->Elements = reinterpret_cast<LinkedListRegion*>(u8NewPool + sizeof(LinkedListRegionPool));
+    newPool->Size = (m_BlockSize - sizeof(LinkedListRegionPool)) / sizeof(LinkedListRegion);
+    memset(newPool->Elements, 0, sizeof(LinkedListRegion) * newPool->Size);
 
     newPool->Next = m_FirstPool.Next;
     m_FirstPool.Next = newPool;
-    m_TotalCapacity += newPool->Size;
+    m_PoolCapacity += newPool->Size;
 }
 
-LinkedListBlock* LinkedListAllocator::FindBlock(uint64_t base)
+LinkedListRegion* LinkedListAllocator::FindRegion(uint64_t base)
 {
-    LinkedListBlock* current = m_First;
-    while (current != nullptr && base >= current->Base + current->Size)
+    LinkedListRegion* current = m_First;
+    while (current != nullptr && base > current->Base)
         current = current->Next;
 
-    if (current != nullptr && base >= current->Base)
+    if (current != nullptr && base == current->Base)
         return current;
 
     return nullptr;
 }
 
-LinkedListBlock* LinkedListAllocator::FindInsertionPosition(uint64_t base, size_t size)
+LinkedListRegion* LinkedListAllocator::FindInsertionPosition(uint64_t base, size_t size)
 {
-    LinkedListBlock* insertPos = m_First;
+    LinkedListRegion* insertPos = m_First;
     while (insertPos != nullptr && (base > insertPos->Base || (base == insertPos->Base && size > insertPos->Size)))
         insertPos = insertPos->Next;
 
     return insertPos;
 }
 
-void LinkedListAllocator::InsertBlock(LinkedListBlock* block, LinkedListBlock* insertBefore)
+void LinkedListAllocator::InsertRegion(LinkedListRegion* region, LinkedListRegion* insertBefore)
 {
-    // First block in list
+    // First region in list
     if (m_First == nullptr)
     {
-        m_First = m_Last = block;
-        block->Next = nullptr;
-        block->Prev = nullptr;
+        m_First = m_Last = region;
+        region->Next = nullptr;
+        region->Prev = nullptr;
     }
     // last
     else if (insertBefore == nullptr)
     {
-        block->Prev = m_Last;
-        block->Next = nullptr;
-        m_Last->Next = block;
-        m_Last = block;
+        region->Prev = m_Last;
+        region->Next = nullptr;
+        m_Last->Next = region;
+        m_Last = region;
     }
     // first
-    else if (insertBefore->Prev == nullptr) 
+    else if (insertBefore->Prev == nullptr)
     {
-        block->Prev = nullptr;
-        block->Next = m_First;
-        m_First->Prev = block;
-        m_First = block; 
+        region->Prev = nullptr;
+        region->Next = m_First;
+        m_First->Prev = region;
+        m_First = region;
     }
     // middle
     else
     {
-        block->Prev = insertBefore->Prev;
-        block->Next = insertBefore;
-        insertBefore->Prev->Next = block;
-        insertBefore->Prev = block;
+        region->Prev = insertBefore->Prev;
+        region->Next = insertBefore;
+        insertBefore->Prev->Next = region;
+        insertBefore->Prev = region;
     }
 }
 
-void LinkedListAllocator::DeleteBlock(LinkedListBlock* block)
+void LinkedListAllocator::DeleteRegion(LinkedListRegion* region)
 {
     // first?
-    if (block->Prev == nullptr)
-        m_First = block->Next;
+    if (region->Prev == nullptr)
+        m_First = region->Next;
     else
-        block->Prev->Next = block->Next;
+	    region->Prev->Next = region->Next;
 
     // last?
-    if (block->Next == nullptr)
-        m_Last = block->Prev;
+    if (region->Next == nullptr)
+        m_Last = region->Prev;
     else
-        block->Next->Prev = block->Prev;
+	    region->Next->Prev = region->Prev;
 
 }
 
-void LinkedListAllocator::DeleteAndReleaseBlock(LinkedListBlock* block)
+void LinkedListAllocator::DeleteAndReleaseRegion(LinkedListRegion* region)
 {
-    DeleteBlock(block);
-    ReleaseBlock(block);
+    DeleteRegion(region);
+    ReleaseRegion(region);
 }
-
 
 // for statistics
 RegionType LinkedListAllocator::GetState(ptr_t address)
@@ -267,8 +267,8 @@ RegionType LinkedListAllocator::GetState(ptr_t address)
 // for debugging
 void LinkedListAllocator::DumpImpl(JsonWriter& writer)
 {
-    writer.Property("totalCapacity", m_TotalCapacity);
-    writer.Property("usedBlocks", m_UsedBlocks);
+    writer.Property("totalCapacity", m_PoolCapacity);
+    writer.Property("usedBlocks", m_PoolUsedElements);
     writer.BeginArray("blockList");
 
     for (auto current = m_First; current != nullptr; current = current->Next)
@@ -297,9 +297,9 @@ uint64_t LinkedListAllocator::MeasureWastedMemory()
     return total;
 }
 
-LinkedListBlock* LinkedListAllocatorFirstFit::FindFreeRegion(uint32_t blocks)
+LinkedListRegion* LinkedListAllocatorFirstFit::FindFreeRegion(uint32_t blocks)
 {
-    LinkedListBlock* current = m_First;
+    LinkedListRegion* current = m_First;
     while (current != nullptr && (current->Type != RegionType::Free || current->Size < blocks))
         current = current->Next;
 
@@ -312,12 +312,12 @@ LinkedListAllocatorNextFit::LinkedListAllocatorNextFit()
 {
 }
 
-LinkedListBlock* LinkedListAllocatorNextFit::FindFreeRegion(uint32_t blocks)
+LinkedListRegion* LinkedListAllocatorNextFit::FindFreeRegion(uint32_t blocks)
 {
     if (m_Next == nullptr)
         m_Next = m_First;
 
-    LinkedListBlock* current = m_Next;
+    LinkedListRegion* current = m_Next;
     while (current->Type != RegionType::Free || current->Size < blocks)
     {
         current = current->Next;
@@ -334,24 +334,24 @@ LinkedListBlock* LinkedListAllocatorNextFit::FindFreeRegion(uint32_t blocks)
     return current;
 }
 
-void LinkedListAllocatorNextFit::DeleteBlock(LinkedListBlock* block)
+void LinkedListAllocatorNextFit::DeleteRegion(LinkedListRegion* region)
 {
-    LinkedListAllocator::DeleteBlock(block);
+    LinkedListAllocator::DeleteRegion(region);
 
-    if (block == m_Next)
+    if (region == m_Next)
         m_Next = nullptr;
 }
 
 
-LinkedListBlock* LinkedListAllocatorBestFit::FindFreeRegion(uint32_t blocks)
+LinkedListRegion* LinkedListAllocatorBestFit::FindFreeRegion(uint32_t blocks)
 {
-    LinkedListBlock* found = nullptr;
-    LinkedListBlock* current = m_First;
+    LinkedListRegion* found = nullptr;
+    LinkedListRegion* current = m_First;
 
     while (current != nullptr)
     {
-        if (current->Type == RegionType::Free 
-            && current->Size > blocks 
+        if (current->Type == RegionType::Free
+            && current->Size > blocks
             && (found == nullptr || current->Size < found->Size))
             found = current;
 
@@ -361,18 +361,18 @@ LinkedListBlock* LinkedListAllocatorBestFit::FindFreeRegion(uint32_t blocks)
     return found;
 }
 
-LinkedListBlock* LinkedListAllocatorWorstFit::FindFreeRegion(uint32_t blocks)
+LinkedListRegion* LinkedListAllocatorWorstFit::FindFreeRegion(uint32_t blocks)
 {
-    LinkedListBlock* found = nullptr;
-    LinkedListBlock* current = m_First;
-    
+    LinkedListRegion* found = nullptr;
+    LinkedListRegion* current = m_First;
+
     while (current != nullptr)
     {
-        if (current->Type == RegionType::Free 
-            && current->Size > blocks 
+        if (current->Type == RegionType::Free
+            && current->Size > blocks
             && (found == nullptr || current->Size > found->Size))
             found = current;
-            
+
         current = current->Next;
     }
 

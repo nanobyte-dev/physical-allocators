@@ -45,21 +45,21 @@ public:
     
     // for statistics
     virtual RegionType GetState(ptr_t address) = 0;
-    void Dump(std::string filename = "");
+    void Dump(const std::string& filename = "");
     virtual uint64_t MeasureWastedMemory() = 0; // in blocks
 
 protected:
     template<typename TPtr>
     inline uint64_t ToBlock(TPtr ptr)
     {
-        uint8_t* u8Ptr = reinterpret_cast<uint8_t*>(ptr);
+        auto* u8Ptr = reinterpret_cast<uint8_t*>(ptr);
         return (u8Ptr - m_MemBase) / m_BlockSize;
     }
 
     template<typename TPtr>
     inline uint64_t ToBlockRoundUp(TPtr ptr)
     {
-        uint8_t* u8Ptr = reinterpret_cast<uint8_t*>(ptr);
+        auto* u8Ptr = reinterpret_cast<uint8_t*>(ptr);
         return DivRoundUp(static_cast<uint64_t>(u8Ptr - m_MemBase), m_BlockSize);
     }
 
@@ -74,7 +74,7 @@ protected:
 
 private:
     void DetermineMemoryRange(const Region regions[], size_t regionCount);
-    void FixOverlappingRegions(RegionBlocks regions[], size_t& regionCount);
+    static void FixOverlappingRegions(RegionBlocks regions[], size_t& regionCount);
 
 protected:
     uint64_t m_BlockSize;

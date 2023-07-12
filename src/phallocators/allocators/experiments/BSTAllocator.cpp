@@ -1,20 +1,19 @@
 #include "BSTAllocator.hpp"
-#include <algorithm>
 #include <memory.h>
 #include <math/MathHelpers.hpp>
 #include <util/JsonWriter.hpp>
 
-void BSTBlock::Clear()
+void BSTRegion::Clear()
 {
     this->BlockUsed = false;
 }
 
-void BSTBlock::Set(uint64_t base, 
+void BSTRegion::Set(uint64_t base, 
                    uint64_t size,
                    RegionType type,
-                   BSTBlock* parent,
-                   BSTBlock* left,
-                   BSTBlock* right)
+                   BSTRegion* parent,
+                   BSTRegion* left,
+                   BSTRegion* right)
 {
     this->Base = base;
     this->Size = size;
@@ -29,12 +28,14 @@ BSTAllocator::BSTAllocator()
     : Allocator(),
       m_Root(nullptr),
       m_TotalCapacity(STATIC_POOL_SIZE),
-      m_UsedBlocks(0),
+      m_UsedElements(0),
+      m_FirstPool(),
+	  m_StaticRegionPool(),
       m_CurrentPool(&m_FirstPool),
       m_CurrentPoolNextFree(0)
 {
-    memset(m_StaticBlockPool, 0, sizeof(m_StaticBlockPool));
-    m_FirstPool.Blocks = m_StaticBlockPool;
+    memset(m_StaticRegionPool, 0, sizeof(m_StaticRegionPool));
+    m_FirstPool.Regions  = m_StaticRegionPool;
     m_FirstPool.Size = STATIC_POOL_SIZE;
     m_FirstPool.Next = &m_FirstPool;
 }
@@ -45,9 +46,9 @@ bool BSTAllocator::InitializeImpl(RegionBlocks regions[], size_t regionCount)
 
     for (size_t i = 0; i < regionCount; i++)
     {
-        BSTBlock* block = NewBlock();
-        block->Set(regions[i].Base, regions[i].Size, regions[i].Type);
-        InsertBlock(block);
+        BSTRegion* region = NewRegion();
+	    region->Set(regions[i].Base, regions[i].Size, regions[i].Type);
+	    InsertRegion(region);
     }
 
     return true;
@@ -58,15 +59,15 @@ ptr_t BSTAllocator::Allocate(uint32_t blocks)
     ptr_t ret = AllocateInternal(blocks, RegionType::Reserved);
 
     // over 80% usage => add another block pool
-    if (m_UsedBlocks >= (m_TotalCapacity * 4) / 5)
+    if (m_UsedElements >= (m_TotalCapacity * 4) / 5)
     {
         // allocate another pool
-        uint8_t* u8NewPool = reinterpret_cast<uint8_t*>(AllocateInternal(1, RegionType::Allocator));
+        auto* u8NewPool = reinterpret_cast<uint8_t*>(AllocateInternal(1, RegionType::Allocator));
         
-        BSTBlockPool* newPool = reinterpret_cast<BSTBlockPool*>(u8NewPool);
-        newPool->Blocks = reinterpret_cast<BSTBlock*>(u8NewPool + sizeof(BSTBlockPool));
-        newPool->Size = (m_BlockSize - sizeof(BSTBlockPool)) / sizeof(BSTBlock);
-        memset(newPool->Blocks, 0, sizeof(BSTBlock) * newPool->Size);
+        auto* newPool = reinterpret_cast<BSTRegionPool*>(u8NewPool);
+        newPool->Regions = reinterpret_cast<BSTRegion*>(u8NewPool + sizeof(BSTRegionPool));
+        newPool->Size = (m_BlockSize - sizeof(BSTRegionPool)) / sizeof(BSTRegion);
+        memset(newPool->Regions, 0, sizeof(BSTRegion) * newPool->Size);
 
         newPool->Next = m_FirstPool.Next;
         m_FirstPool.Next = newPool;
@@ -82,7 +83,7 @@ ptr_t BSTAllocator::AllocateInternal(uint32_t blocks, RegionType type)
         return nullptr;
 
     // find region
-    BSTBlock* found = FindFreeRegion(m_Root, blocks);
+    BSTRegion* found = FindFreeRegion(m_Root, blocks);
 
     // out of memory?
     if (found == nullptr)
@@ -99,21 +100,21 @@ ptr_t BSTAllocator::AllocateInternal(uint32_t blocks, RegionType type)
     else
     {
         // size not equal, split block in 2
-        BSTBlock* newBlock = NewBlock();
+        BSTRegion* newBlock = NewRegion();
         newBlock->Set(found->Base, blocks, type);
 
         found->Base += blocks;
         found->Size -= blocks;
 
-        DeleteBlock(found);
-        InsertBlock(newBlock);
-        InsertBlock(found);
+	    DeleteRegion(found);
+	    InsertRegion(newBlock);
+	    InsertRegion(found);
     }
 
     return ret;    
 }
 
-BSTBlock* BSTAllocator::FindFreeRegion(BSTBlock* root, size_t blocks)
+BSTRegion* BSTAllocator::FindFreeRegion(BSTRegion* root, size_t blocks)
 {
     // find region
     if (root == nullptr)
@@ -124,7 +125,7 @@ BSTBlock* BSTAllocator::FindFreeRegion(BSTBlock* root, size_t blocks)
         return root;
 
     // go left
-    BSTBlock* left = FindFreeRegion(root->Left, blocks);
+    BSTRegion* left = FindFreeRegion(root->Left, blocks);
     if (left != nullptr)
         return left;
 
@@ -137,7 +138,7 @@ void BSTAllocator::Free(void* basePtr, uint32_t blocks)
     uint64_t base = ToBlock(basePtr);
 
     // Find node
-    BSTBlock* current = m_Root;
+    BSTRegion* current = m_Root;
     while (current != nullptr && current->Base != base)
         current = (base < current->Base) ? current->Left : current->Right;
     
@@ -148,26 +149,26 @@ void BSTAllocator::Free(void* basePtr, uint32_t blocks)
     current->Type = RegionType::Free;
 
     // can we merge with predecessor?
-    BSTBlock* prev = GetPredecessor(current);
+    BSTRegion* prev = GetPredecessor(current);
     if (prev != nullptr && prev->Type == RegionType::Free)
     {
         prev->Size += current->Size;
-        DeleteAndReleaseBlock(current);
+	    DeleteAndReleaseRegion(current);
         current = prev;
     }
 
     // can we merge with the successor
-    BSTBlock* next = GetSuccessor(current);
+    BSTRegion* next = GetSuccessor(current);
     if (next != nullptr && next->Type == RegionType::Free)
     {
         current->Size += next->Size;
-        DeleteAndReleaseBlock(next);
+	    DeleteAndReleaseRegion(next);
     }
 
     // TODO: under 20% usage? compress and free up some pools
 }
 
-BSTBlock* BSTAllocator::NewBlock()
+BSTRegion* BSTAllocator::NewRegion()
 {
     do {
         if (m_CurrentPoolNextFree >= m_CurrentPool->Size)
@@ -181,138 +182,137 @@ BSTBlock* BSTAllocator::NewBlock()
             m_CurrentPoolNextFree = 0;
         }
        
-    } while (m_CurrentPool->Blocks[m_CurrentPoolNextFree++].BlockUsed);
+    } while (m_CurrentPool->Regions[m_CurrentPoolNextFree++].BlockUsed);
 
-    ++m_UsedBlocks;
-    return &m_CurrentPool->Blocks[m_CurrentPoolNextFree - 1];
+    ++m_UsedElements;
+    return &m_CurrentPool->Regions[m_CurrentPoolNextFree - 1];
 }
 
-void BSTAllocator::ReleaseBlock(BSTBlock* block)
+void BSTAllocator::ReleaseRegion(BSTRegion* region)
 {
-    block->Clear();
-    m_UsedBlocks--;
+	region->Clear();
+    m_UsedElements--;
 }
 
-
-void BSTAllocator::InsertBlock(BSTBlock* block)
+void BSTAllocator::InsertRegion(BSTRegion* region)
 {
-    BSTBlock* parent = nullptr;
-    BSTBlock* current = m_Root;
+    BSTRegion* parent = nullptr;
+    BSTRegion* current = m_Root;
     while (current != nullptr)
     {
         parent = current;
-        current = (block->Base < current->Base) 
+        current = (region->Base < current->Base)
             ? current->Left
             : current->Right;
     }
 
     // insert
-    block->Parent = parent;
+	region->Parent = parent;
     if (parent == nullptr)
-        m_Root = block;
-    else if (block->Base < parent->Base)
-        parent->Left = block;
+        m_Root = region;
+    else if (region->Base < parent->Base)
+        parent->Left = region;
     else
-        parent->Right = block;
+        parent->Right = region;
 }
 
-void BSTAllocator::DeleteBlock(BSTBlock* block)
+void BSTAllocator::DeleteRegion(BSTRegion* region)
 {
-    if (block->Left == nullptr)
-        ReplaceBlockWith(block, block->Right);
-    else if (block->Right == nullptr)
-        ReplaceBlockWith(block, block->Left);
+    if (region->Left == nullptr)
+	    ReplaceRegionWith(region, region->Right);
+    else if (region->Right == nullptr)
+	    ReplaceRegionWith(region, region->Left);
     else
     {
-        BSTBlock* next = GetSuccessor(block);
-        if (next->Parent != block)
+        BSTRegion* next = GetSuccessor(region);
+        if (next->Parent != region)
         {
-            ReplaceBlockWith(next, next->Right);
-            next->Right = block->Right;
+	        ReplaceRegionWith(next, next->Right);
+            next->Right = region->Right;
             next->Right->Parent = next;
         }
-        ReplaceBlockWith(block, next);
-        next->Left = block->Left;
+	    ReplaceRegionWith(region, next);
+        next->Left = region->Left;
         next->Left->Parent = next;
     }
 
-    block->Parent = nullptr;
-    block->Left = nullptr;
-    block->Right = nullptr;
+	region->Parent = nullptr;
+	region->Left = nullptr;
+	region->Right = nullptr;
 }
 
-void BSTAllocator::ReplaceBlockWith(BSTBlock* block, BSTBlock* replaceWith)
+void BSTAllocator::ReplaceRegionWith(BSTRegion* region, BSTRegion* replaceWith)
 {
-    if (block == m_Root)
+    if (region == m_Root)
         m_Root = replaceWith;
-    else if (block == block->Parent->Left)
-        block->Parent->Left = replaceWith;
-    else if (block == block->Parent->Right)
-        block->Parent->Right = replaceWith;
+    else if (region == region->Parent->Left)
+	    region->Parent->Left = replaceWith;
+    else if (region == region->Parent->Right)
+	    region->Parent->Right = replaceWith;
 
     if (replaceWith != nullptr)
-        replaceWith->Parent = block->Parent;
+        replaceWith->Parent = region->Parent;
 }
 
 
 
-BSTBlock* BSTAllocator::GetFirst()
+BSTRegion* BSTAllocator::GetFirst()
 {
-    BSTBlock* current = m_Root;
+    BSTRegion* current = m_Root;
     while (current->Left != nullptr)
         current = current->Left;
 
     return current;
 }
 
-BSTBlock* BSTAllocator::GetPredecessor(BSTBlock* block)
+BSTRegion* BSTAllocator::GetPredecessor(BSTRegion* region)
 {
-    if (block == nullptr)
+    if (region == nullptr)
         return nullptr;
 
-    if (block->Left != nullptr)
+    if (region->Left != nullptr)
     {
         // Return right-est item in the left subtree
-        block = block->Left;
-        while (block->Right != nullptr)
-            block = block->Right;
+        region = region->Left;
+        while (region->Right != nullptr)
+            region = region->Right;
 
-        return block;
+        return region;
     }
 
-    while (block->Parent != nullptr)
+    while (region->Parent != nullptr)
     {
-        if (block == block->Parent->Right)
-            return block->Parent;
-        else if (block == block->Parent->Left)
-            block = block->Parent;
+        if (region == region->Parent->Right)
+            return region->Parent;
+        else if (region == region->Parent->Left)
+            region = region->Parent;
     }
 
     // last node
     return nullptr;   
 }
 
-BSTBlock* BSTAllocator::GetSuccessor(BSTBlock* block)
+BSTRegion* BSTAllocator::GetSuccessor(BSTRegion* region)
 {
-    if (block == nullptr)
+    if (region == nullptr)
         return nullptr;
 
-    if (block->Right != nullptr)
+    if (region->Right != nullptr)
     {
         // Return left-est item in the right subtree
-        block = block->Right;
-        while (block->Left != nullptr)
-            block = block->Left;
+        region = region->Right;
+        while (region->Left != nullptr)
+            region = region->Left;
 
-        return block;
+        return region;
     }
 
-    while (block->Parent != nullptr)
+    while (region->Parent != nullptr)
     {
-        if (block == block->Parent->Left)
-            return block->Parent;
-        else if (block == block->Parent->Right)
-            block = block->Parent;
+        if (region == region->Parent->Left)
+            return region->Parent;
+        else if (region == region->Parent->Right)
+            region = region->Parent;
     }
 
     // last node
@@ -324,8 +324,8 @@ RegionType BSTAllocator::GetState(ptr_t address)
 {
     uint64_t block = ToBlock(address);
 
-    BSTBlock* prev = nullptr;
-    BSTBlock* current = m_Root;
+    BSTRegion* prev = nullptr;
+    BSTRegion* current = m_Root;
     while (current != nullptr && current->Base != block)
     {
         prev = current;

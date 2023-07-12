@@ -1,10 +1,9 @@
 #include "BBSTAllocator.hpp"
 #include <algorithm>
-#include <memory.h>
 #include <math/MathHelpers.hpp>
 #include <util/JsonWriter.hpp>
 
-BBSTBlock::BBSTBlock(uint64_t base, 
+BBSTRegion::BBSTRegion(uint64_t base,
                     uint64_t size,
                     RegionType type)
     : Base(base),
@@ -23,7 +22,7 @@ bool BBSTAllocator::InitializeImpl(RegionBlocks regions[], size_t regionCount)
 {
     for (size_t i = 0; i < regionCount; i++)
     {
-        m_Map.emplace(regions[i].Base, BBSTBlock(regions[i].Base, regions[i].Size, regions[i].Type));
+        m_Map.emplace(regions[i].Base, BBSTRegion(regions[i].Base, regions[i].Size, regions[i].Type));
     }
 
     return true;
@@ -48,9 +47,9 @@ ptr_t BBSTAllocator::Allocate(uint32_t blocks)
             }
             else
             {
-                BBSTBlock block = it->second;
+                BBSTRegion block = it->second;
                 m_Map.erase(it);
-                m_Map.emplace(block.Base, BBSTBlock(block.Base, blocks, RegionType::Reserved));
+                m_Map.emplace(block.Base, BBSTRegion(block.Base, blocks, RegionType::Reserved));
 
                 block.Base += blocks;
                 block.Size -= blocks;
@@ -136,6 +135,6 @@ void BBSTAllocator::DumpImpl(JsonWriter& writer)
 uint64_t BBSTAllocator::MeasureWastedMemory()
 {
     // not accurate
-    size_t mapSize = sizeof(m_Map) + m_Map.size() * sizeof(std::multimap<uint64_t, BBSTBlock>::node_type);
+    size_t mapSize = sizeof(m_Map) + m_Map.size() * sizeof(std::multimap<uint64_t, BBSTRegion>::node_type); // NOLINT(bugprone-sizeof-container)
     return DivRoundUp(sizeof(*this) + mapSize, m_BlockSize);
 }

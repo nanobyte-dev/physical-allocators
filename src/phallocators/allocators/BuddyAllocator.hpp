@@ -2,6 +2,9 @@
 #include "../math/MathHelpers.hpp"
 
 #define LAYER_COUNT 10
+
+// number that we multiply to size of smallest block to get the biggest block
+// (or how many smallest blocks we can fit in 1 biggest block)
 #define BIG_BLOCK_MULTIPLIER (1ull << (LAYER_COUNT - 1))
 
 class BuddyAllocator : public Allocator
@@ -24,17 +27,17 @@ private:
     void MarkRegion(ptr_t basePtr, size_t sizeBytes, bool isUsed);
     void MarkBlocks(uint64_t block, size_t count, bool isUsed);
 
-    inline uint64_t BlocksOnLayer(int layer)
+    inline uint64_t BlocksOnLayer(int layer) const
     {
         return (1ull << layer) * m_BlocksLayer0;
     }
 
-    inline uint64_t IndexOfLayer(int layer)
+    inline uint64_t IndexOfLayer(int layer) const
     {
         return DivRoundUp(m_BlocksLayer0, BitmapUnit) * ((1ull << layer) - 1);
     }
 
-    inline int GetNearestLayer(int blocks)
+    static inline int GetNearestLayer(int blocks)
     {
         return LAYER_COUNT - 1 - Log2(blocks) - (IsPowerOf2(blocks) ? 0 : 1);
     }

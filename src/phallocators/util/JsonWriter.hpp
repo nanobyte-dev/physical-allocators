@@ -8,20 +8,20 @@ public:
     JsonWriter(std::ostream& out, bool pretty);
 
     void BeginObject();
-    void BeginObject(std::string name);
+    void BeginObject(const std::string& name);
     void EndObject();
     
     void BeginArray();
-    void BeginArray(std::string name);
+    void BeginArray(const std::string& name);
     void EndArray();
 
     template<typename T>
-    void Property(std::string name, T value);
+    void Property(const std::string& name, T value);
 
 private:
     void Indent();
     void HandleComma();
-    std::string Escape(std::string str);
+    static std::string Escape(const std::string& str);
 
     std::ostream& m_Out;
     bool m_NeedComma;
@@ -30,7 +30,7 @@ private:
 };
 
 template<typename T>
-void JsonWriter::Property(std::string name, T value)
+void JsonWriter::Property(const std::string& name, T value)
 {
     HandleComma();
     m_Out << "\"" << Escape(name) << "\" : ";
@@ -50,10 +50,10 @@ void JsonWriter::Property(std::string name, T value)
 }
 
 template<>
-void JsonWriter::Property<const char*>(std::string name, const char* value);
+void JsonWriter::Property<const char*>(const std::string& name, const char* value);
 
 template<>
-void JsonWriter::Property<std::string>(std::string name, std::string value);
+void JsonWriter::Property<std::string>(const std::string& name, std::string value);
 
 template<>
-void JsonWriter::Property<bool>(std::string name, bool value);
+void JsonWriter::Property<bool>(const std::string& name, bool value);

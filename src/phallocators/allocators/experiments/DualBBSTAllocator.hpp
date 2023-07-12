@@ -1,22 +1,20 @@
 #include "../Allocator.hpp"
 #include <map>
 
-#define STATIC_POOL_SIZE 256
-
-struct DualBBSTBlock
+struct DualBBSTRegion
 {
     uint64_t Base;
     uint64_t Size;
     RegionType Type;
 
-    DualBBSTBlock(uint64_t base,
-              uint64_t size,
-              RegionType type);
+    DualBBSTRegion(uint64_t base,
+                   uint64_t size,
+                   RegionType type);
 };
 
 /**
  * Balanced Binary Search Tree allocator
- * (not suitable for an OS because it uses std::multimap)
+ * (not suitable for an OS because it uses std::map, std::multimap)
  */
 class DualBBSTAllocator : public Allocator
 {
@@ -34,6 +32,6 @@ protected:
     void DumpImpl(JsonWriter& writer) override;
 
 private:
-    std::multimap<uint64_t, DualBBSTBlock> m_FreeMap;
-    std::multimap<uint64_t, DualBBSTBlock> m_ReservedMap;
+    std::multimap<uint64_t, DualBBSTRegion> m_FreeMap;
+    std::map<uint64_t, DualBBSTRegion> m_ReservedMap;
 };

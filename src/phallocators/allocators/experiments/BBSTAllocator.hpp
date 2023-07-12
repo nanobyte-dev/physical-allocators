@@ -1,25 +1,23 @@
 #include "../Allocator.hpp"
 #include <map>
 
-#define STATIC_POOL_SIZE 256
-
-struct BBSTBlock
+struct BBSTRegion
 {
     uint64_t Base;
     uint64_t Size;
     RegionType Type;
 
-    BBSTBlock(uint64_t base,
-              uint64_t size,
-              RegionType type);
+    BBSTRegion(uint64_t base,
+               uint64_t size,
+               RegionType type);
 };
 
 /**
  * Self Balancing Binary Search Tree allocator
- * - implemented using std::multimap because it uses black-red trees,
+ * - implemented using std::map because it uses black-red trees,
  * and because implementing black-red trees is hard
  * 
- * Note: not suitable for an OS because it uses std::multimap
+ * Note: not suitable for an OS because it uses std::map
  */
 class BBSTAllocator : public Allocator
 {
@@ -37,5 +35,5 @@ protected:
     void DumpImpl(JsonWriter& writer) override;
 
 private:
-    std::multimap<uint64_t, BBSTBlock> m_Map;
+    std::map<uint64_t, BBSTRegion> m_Map;
 };

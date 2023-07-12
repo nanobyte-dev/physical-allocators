@@ -25,5 +25,5 @@
                                 BBSTAllocator,                  \
                                 DualBBSTAllocator
 
-// #undef ALL_ALLOCATORS
-// #define ALL_ALLOCATORS BuddyAllocator
+#undef ALL_ALLOCATORS
+#define ALL_ALLOCATORS BuddyAllocator

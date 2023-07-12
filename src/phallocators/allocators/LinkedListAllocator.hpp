@@ -2,29 +2,30 @@
 
 #define STATIC_POOL_SIZE 256
 
-struct LinkedListBlock
+struct LinkedListRegion
 {
     uint64_t Base;
     uint64_t Size;
     RegionType Type;
-    LinkedListBlock* Next;
-    LinkedListBlock* Prev;
-    bool BlockUsed;
+    LinkedListRegion* Next;
+    LinkedListRegion* Prev;
+    bool ElementUsed;
 
     void Clear();
-    void Set(uint64_t base, 
+    void Set(uint64_t base,
              uint64_t size,
              RegionType type,
-             LinkedListBlock* prev = nullptr,
-             LinkedListBlock* next = nullptr);
+             LinkedListRegion* prev = nullptr,
+             LinkedListRegion* next = nullptr);
 };
 
-struct LinkedListBlockPool
+struct LinkedListRegionPool
 {
-    LinkedListBlockPool* Next;
+    LinkedListRegionPool* Next;
     uint64_t Size;
-    LinkedListBlock* Blocks;
+    LinkedListRegion* Elements;
 };
+
 
 
 class LinkedListAllocator : public Allocator
@@ -33,41 +34,41 @@ public:
     LinkedListAllocator();
     ptr_t Allocate(uint32_t blocks = 1) override;
     void Free(void* base, uint32_t blocks) override;
-    
+
     // for statistics
     RegionType GetState(ptr_t address) override;
     uint64_t MeasureWastedMemory() override;
-
+    
 protected:
     bool InitializeImpl(RegionBlocks regions[], size_t regionCount) override;
     void DumpImpl(JsonWriter& writer) override;
 
-    virtual LinkedListBlock* FindFreeRegion(uint32_t blocks) = 0;
+    virtual LinkedListRegion* FindFreeRegion(uint32_t blocks) = 0;
 
     // Block pool management
-    LinkedListBlock* NewBlock();
-    virtual void ReleaseBlock(LinkedListBlock* block);
+    LinkedListRegion* NewRegion();
+    virtual void ReleaseRegion(LinkedListRegion* region);
     void GrowPool();
 
     // Linked list operations
-    LinkedListBlock* FindBlock(uint64_t base);
-    LinkedListBlock* FindInsertionPosition(uint64_t base, size_t size);
-    void InsertBlock(LinkedListBlock* block, LinkedListBlock* insertBefore);
-    virtual void DeleteBlock(LinkedListBlock* block);
-    void DeleteAndReleaseBlock(LinkedListBlock* block);
+    LinkedListRegion* FindRegion(uint64_t base);
+    LinkedListRegion* FindInsertionPosition(uint64_t base, size_t size);
+    void InsertRegion(LinkedListRegion* region, LinkedListRegion* insertBefore);
+    virtual void DeleteRegion(LinkedListRegion* region);
+    void DeleteAndReleaseRegion(LinkedListRegion* region);
 
 private:
     ptr_t AllocateInternal(uint32_t blocks, RegionType type);
 
 protected:
-    LinkedListBlock *m_First, *m_Last;
+    LinkedListRegion *m_First, *m_Last;
 
-    uint64_t m_TotalCapacity;
-    uint64_t m_UsedBlocks;
+    uint64_t m_PoolCapacity;
+    uint64_t m_PoolUsedElements;
 
-    LinkedListBlockPool m_FirstPool;
-    LinkedListBlock m_StaticBlockPool[STATIC_POOL_SIZE];
-    LinkedListBlockPool* m_CurrentPool;
+    LinkedListRegionPool m_FirstPool;
+    LinkedListRegion m_StaticRegionPool[STATIC_POOL_SIZE];
+    LinkedListRegionPool* m_CurrentPool;
     uint32_t m_CurrentPoolNextFree;
 };
 
@@ -75,7 +76,7 @@ protected:
 class LinkedListAllocatorFirstFit : public LinkedListAllocator
 {
 protected:
-    LinkedListBlock* FindFreeRegion(uint32_t blocks) override;
+    LinkedListRegion* FindFreeRegion(uint32_t blocks) override;
 };
 
 
@@ -85,23 +86,23 @@ public:
     LinkedListAllocatorNextFit();
 
 protected:
-    LinkedListBlock* FindFreeRegion(uint32_t blocks) override;
-    void DeleteBlock(LinkedListBlock* block) override;
+    LinkedListRegion* FindFreeRegion(uint32_t blocks) override;
+    void DeleteRegion(LinkedListRegion* region) override;
 
 private:
-    LinkedListBlock* m_Next;
+    LinkedListRegion* m_Next;
 };
 
 
 class LinkedListAllocatorBestFit : public LinkedListAllocator
 {
 protected:
-    LinkedListBlock* FindFreeRegion(uint32_t blocks) override;
+    LinkedListRegion* FindFreeRegion(uint32_t blocks) override;
 };
 
 
 class LinkedListAllocatorWorstFit : public LinkedListAllocator
 {
 protected:
-    LinkedListBlock* FindFreeRegion(uint32_t blocks) override;
+    LinkedListRegion* FindFreeRegion(uint32_t blocks) override;
 };

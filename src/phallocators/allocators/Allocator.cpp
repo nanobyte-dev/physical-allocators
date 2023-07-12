@@ -1,8 +1,8 @@
 #include "Allocator.hpp"
-#include <fstream>
 #include <algorithm>
 #include <memory.h>
-#include "../math/MathHelpers.hpp"
+#include <cassert>
+#include <fstream>
 
 template <typename T>
 void ArrayDeleteElement(T array[], size_t indexToDelete, size_t& count)
@@ -16,6 +16,8 @@ class RegionCompare
 public:
     bool operator()(const RegionBlocks& a, const RegionBlocks& b)
     {
+        if (a.Base == b.Base) 
+            return a.Size < b.Size;
         return a.Base < b.Base;
     }
 };
@@ -34,6 +36,7 @@ bool Allocator::Initialize(uint64_t blockSize, const Region regions[], size_t re
     DetermineMemoryRange(regions, regionCount);
 
     RegionBlocks tempRegions[1024];
+    assert(regionCount < 1024);
     for (size_t i = 0; i < regionCount; i++)
     {
         if (regions[i].Type == RegionType::Free) 
@@ -49,7 +52,6 @@ bool Allocator::Initialize(uint64_t blockSize, const Region regions[], size_t re
         tempRegions[i].Type = regions[i].Type;
 
     }
-    //assert(regionCount < 1024);
 
     FixOverlappingRegions(tempRegions, regionCount);
     return InitializeImpl(tempRegions, regionCount);
@@ -58,7 +60,7 @@ bool Allocator::Initialize(uint64_t blockSize, const Region regions[], size_t re
 void Allocator::DetermineMemoryRange(const Region regions[], size_t regionCount)
 {
     // determine where memory begins and ends
-    uint8_t* memBase = reinterpret_cast<uint8_t*>(-1);
+    auto* memBase = reinterpret_cast<uint8_t*>(-1);
     uint8_t* memEnd = nullptr;
 
     // go through list of blocks to determine 3 things: where memory begins, where it ends and biggest free region
@@ -144,7 +146,7 @@ void Allocator::FixOverlappingRegions(RegionBlocks regions[], size_t& regionCoun
     }
 }
 
-void Allocator::Dump(std::string filename)
+void Allocator::Dump(const std::string& filename)
 {
     std::ofstream fout;
     std::ostream* out = &std::cout;

@@ -2,14 +2,19 @@
 #include <math/MathHelpers.hpp>
 #include <util/JsonWriter.hpp>
 #include <Debug.hpp>
-#include <Config.hpp>
 #include <memory.h>
 #include <iostream>
 #include <sstream>
 
 BuddyAllocator::BuddyAllocator()
     : Allocator(),
+      m_SmallBlockSize(),
+      m_BigBlockSize(),
+	  m_Bitmap(nullptr),
+	  m_BitmapSize(),
+	  m_BlocksLayer0(),
       m_LastAllocatedBlock(0),
+	  m_LastAllocatedCount(0),
       m_LastAllocatedLayer(-1),
       m_Waste(0)
 {
@@ -104,17 +109,17 @@ ptr_t BuddyAllocator::Allocate(uint32_t blocks)
         uint64_t iFound = FindFreeBlock(layerFound);
 
         // out of memory
-        if (iFound == (uint64_t)-1)
+		if (iFound == (uint64_t)-1)
             return nullptr;
 
         // if we are on a lower level than "layer", we need to split all the blocks all the way to "layer"
         // always split on the left side
-        int i = iFound;
+	    uint64_t i = iFound;
         for (int l = layerFound; l < layer; l++, i <<= 1)
             Set(l, i, true);
 
         // bubble down - mark blocks below as used
-        int iBubble = i << 1;
+        uint64_t iBubble = i << 1;
         int countBubble = 2;
         for (int l = layer + 1; l < LAYER_COUNT; l++, iBubble <<= 1, countBubble <<= 1)
         {
@@ -144,13 +149,13 @@ uint64_t BuddyAllocator::FindFreeBlock(int& layer)
     // search for free blocks on lower levels
     for(; layer > 0; layer--)
     {
-        auto index = IndexOfLayer(layer);
-        auto count = BlocksOnLayer(layer);
+        auto layerIndex = IndexOfLayer(layer);
+        auto layerCount = BlocksOnLayer(layer);
 
-        for (uint64_t i = 0; i < count / BitmapUnit; i++)
+        for (uint64_t i = 0; i < layerCount / BitmapUnit; i++)
         {
             // a block is considered free if its buddy is used (e.g. 01 or 10)
-            auto value = m_Bitmap[index + i];
+            auto value = m_Bitmap[layerIndex + i];
             auto pairs = ((value & 0xAA) >> 1) ^ (value & 0x55);
             if (pairs != 0)
             {

@@ -2,15 +2,15 @@
 #include <math/MathHelpers.hpp>
 #include <util/JsonWriter.hpp>
 #include <Debug.hpp>
-#include <Config.hpp>
 #include <memory.h>
-#include <iostream>
 #include <sstream>
 
 #define INVALID_BLOCK                   ((uint64_t)-1)
 
 BitmapAllocator::BitmapAllocator()
-    : Allocator()
+    : Allocator(),
+      m_Bitmap(nullptr),
+      m_BitmapSize(0)
 {
 }
 
@@ -100,7 +100,9 @@ void BitmapAllocator::MarkBlocks(uint64_t base, size_t size, bool isUsed)
     // entire bytes in the middle
     if (size >= 8)
     {
-        memset(reinterpret_cast<uint8_t*>(m_Bitmap) + base / 8, isUsed ? 0xFF : 0, size / 8);
+        memset(reinterpret_cast<uint8_t*>(m_Bitmap) + base / 8, 
+               isUsed ? 0xFF : 0,
+               size / 8);
         base += (size - size % 8);
         size = size % 8;
     }
@@ -226,12 +228,12 @@ uint64_t BitmapAllocatorBestFit::FindFreeRegion(uint32_t blocks)
     bool currentRegionType = Get(0);
 
     uint64_t pickedRegionStart = INVALID_BLOCK;
-    bool pickedRegionSize = 0;
+    size_t pickedRegionSize = 0;
 
     while (currentRegionStart < m_MemSize)
     {
         // determine region size
-        size_t size = 0;
+        size_t size;
         uint64_t i;
 
         for (i = currentRegionStart; i < m_MemSize; i++)
@@ -254,7 +256,7 @@ uint64_t BitmapAllocatorBestFit::FindFreeRegion(uint32_t blocks)
         size = i - currentRegionStart;
 
         // check region type
-        if (currentRegionType == false && 
+        if (!currentRegionType &&
             size >= blocks && 
             (pickedRegionStart == INVALID_BLOCK || pickedRegionSize > size))
         {
@@ -276,12 +278,12 @@ uint64_t BitmapAllocatorWorstFit::FindFreeRegion(uint32_t blocks)
     bool currentRegionType = Get(0);
 
     uint64_t pickedRegionStart = INVALID_BLOCK;
-    bool pickedRegionSize = 0;
+    size_t pickedRegionSize = 0;
 
     while (currentRegionStart < m_MemSize)
     {
         // determine region size
-        size_t size = 0;
+        size_t size;
         uint64_t i;
 
         for (i = currentRegionStart; i < m_MemSize; i++)
@@ -304,7 +306,7 @@ uint64_t BitmapAllocatorWorstFit::FindFreeRegion(uint32_t blocks)
         size = i - currentRegionStart;
 
         // check region type
-        if (currentRegionType == false && 
+        if (!currentRegionType &&
             size >= blocks && 
             (pickedRegionStart == INVALID_BLOCK || pickedRegionSize < size))
         {

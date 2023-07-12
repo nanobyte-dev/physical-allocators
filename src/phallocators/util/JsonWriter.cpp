@@ -23,7 +23,7 @@ void JsonWriter::BeginObject()
     }
 }
 
-void JsonWriter::BeginObject(std::string name)
+void JsonWriter::BeginObject(const std::string& name)
 {
     HandleComma();
 
@@ -62,7 +62,7 @@ void JsonWriter::BeginArray()
     }
 }
 
-void JsonWriter::BeginArray(std::string name)
+void JsonWriter::BeginArray(const std::string& name)
 {
     HandleComma();
 
@@ -107,20 +107,21 @@ void JsonWriter::HandleComma()
     }
 }
 
-std::string JsonWriter::Escape(std::string str)
+std::string JsonWriter::Escape(const std::string& str)
 {
-    size_t pos = str.find('\"');
+	std::string escapedStr = str;
+    auto pos = escapedStr.find('\"');
     while (pos != std::string::npos)
     {
-        str.insert(str.begin() + pos, '\\');
-        pos = str.find('\"', pos + 2);
+	    escapedStr.insert(escapedStr.begin() + pos, '\\');
+        pos = escapedStr.find('\"', pos + 2);
     }
 
     return str;
 }
 
 template<>
-void JsonWriter::Property<const char*>(std::string name, const char* value)
+void JsonWriter::Property<const char*>(const std::string& name, const char* value)
 {
     HandleComma();
     m_Out << "\"" << Escape(name) << "\" : \"" << Escape(value) << "\"";
@@ -128,7 +129,7 @@ void JsonWriter::Property<const char*>(std::string name, const char* value)
 }
 
 template<>
-void JsonWriter::Property<std::string>(std::string name, std::string value)
+void JsonWriter::Property<std::string>(const std::string& name, std::string value)
 {
     HandleComma();
     m_Out << "\"" << Escape(name) << "\" : \"" << Escape(value) << "\"";
@@ -136,7 +137,7 @@ void JsonWriter::Property<std::string>(std::string name, std::string value)
 }
 
 template<>
-void JsonWriter::Property<bool>(std::string name, bool value)
+void JsonWriter::Property<bool>(const std::string& name, bool value)
 {
     HandleComma();
     m_Out << "\"" << Escape(name) << "\" : " << (value ? "true" : "false");

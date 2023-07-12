@@ -2,30 +2,30 @@
 
 #define STATIC_POOL_SIZE 256
 
-struct BSTBlock
+struct BSTRegion
 {
     uint64_t Base;
     uint64_t Size;
     RegionType Type;
-    BSTBlock* Parent;
-    BSTBlock* Left;
-    BSTBlock* Right;
+    BSTRegion* Parent;
+    BSTRegion* Left;
+    BSTRegion* Right;
     bool BlockUsed;
 
     void Clear();
     void Set(uint64_t base, 
              uint64_t size,
              RegionType type,
-             BSTBlock* parent = nullptr,
-             BSTBlock* left = nullptr,
-             BSTBlock* right = nullptr);
+             BSTRegion* parent = nullptr,
+             BSTRegion* left = nullptr,
+             BSTRegion* right = nullptr);
 };
 
-struct BSTBlockPool
+struct BSTRegionPool
 {
-    BSTBlockPool* Next;
+    BSTRegionPool* Next;
     uint64_t Size;
-    BSTBlock* Blocks;
+    BSTRegion* Regions;
 };
 
 
@@ -46,35 +46,35 @@ protected:
     
 private:
     ptr_t AllocateInternal(uint32_t blocks, RegionType type);
-    BSTBlock* FindFreeRegion(BSTBlock* root, size_t blocks);
+    BSTRegion* FindFreeRegion(BSTRegion* root, size_t blocks);
 
     // Pool management
-    BSTBlock* NewBlock();
-    void ReleaseBlock(BSTBlock* block);
+    BSTRegion* NewRegion();
+    void ReleaseRegion(BSTRegion* region);
     void GrowPool();
 
     // Binary search tree operations
-    void InsertBlock(BSTBlock* block);
-    void DeleteBlock(BSTBlock* block);
-    void ReplaceBlockWith(BSTBlock* block, BSTBlock* replaceWith);
+    void InsertRegion(BSTRegion* region);
+    void DeleteRegion(BSTRegion* region);
+    void ReplaceRegionWith(BSTRegion* region, BSTRegion* replaceWith);
     
-    inline void DeleteAndReleaseBlock(BSTBlock* block) 
+    inline void DeleteAndReleaseRegion(BSTRegion* region)
     {
-        DeleteBlock(block);
-        ReleaseBlock(block);
+	    DeleteRegion(region);
+	    ReleaseRegion(region);
     }
 
-    BSTBlock* GetFirst();
-    BSTBlock* GetPredecessor(BSTBlock* block);
-    BSTBlock* GetSuccessor(BSTBlock* block);
+    BSTRegion* GetFirst();
+    BSTRegion* GetPredecessor(BSTRegion* region);
+    BSTRegion* GetSuccessor(BSTRegion* region);
 
-    BSTBlock *m_Root;
+    BSTRegion *m_Root;
 
     uint64_t m_TotalCapacity;
-    uint64_t m_UsedBlocks;
+    uint64_t m_UsedElements;
 
-    BSTBlockPool m_FirstPool;
-    BSTBlock m_StaticBlockPool[STATIC_POOL_SIZE];
-    BSTBlockPool* m_CurrentPool;
+    BSTRegionPool m_FirstPool;
+    BSTRegion m_StaticRegionPool[STATIC_POOL_SIZE];
+    BSTRegionPool* m_CurrentPool;
     uint32_t m_CurrentPoolNextFree;
 };

@@ -1,7 +1,7 @@
 export BUILD_DIR=$(abspath build)
 export CXX=g++
-#export CXXFLAGS=-ggdb -std=c++17 -I. -I$(abspath src) -Wall
-export CXXFLAGS=-ggdb -std=c++17 -O2 -march=native -I. -I$(abspath src) -Wall -DMEASURE_WASTE
+export CXXFLAGS=-ggdb -std=c++17 -I. -I$(abspath src) -Wall
+#export CXXFLAGS=-ggdb -std=c++17 -O2 -march=native -I. -I$(abspath src) -Wall -DMEASURE_WASTE
 export AR=ar
 
 .PHONY: all phallocators demo tests benchmark clean .FORCE
